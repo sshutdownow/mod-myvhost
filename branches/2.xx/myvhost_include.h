@@ -31,7 +31,6 @@
 #include "http_log.h"
 #include "http_main.h"
 #include "http_protocol.h"
-#include "http_conf_globals.h"
 #include "util_script.h"
 
 #include "apr.h"
@@ -92,9 +91,9 @@ void cache_vhost_add(myvhost_cfg_t *cfg,
 		    const int uid, const int gid,
 #endif
 		    const int hits);
-void cache_vhost_del(myvhost_cfg_t *cfg, ap_hash_t *cache, const char *host);
+void cache_vhost_del(myvhost_cfg_t *cfg, apr_hash_t *cache, const char *host);
 p_cache_t cache_vhost_find(myvhost_cfg_t *cfg, const char *hostname);
-void cache_vhost_flush(myvhost_cfg_t *cfg, ap_hash_t *cache, time_t older);
+void cache_vhost_flush(myvhost_cfg_t *cfg, apr_hash_t *cache, time_t older);
 __END_DECLS
 
 #ifdef WITH_PHP
