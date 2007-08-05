@@ -330,7 +330,6 @@ static int myvhost_translate(request_rec *r)
     }
     /* we have data */
     res_set = mysql_store_result(cfg->mysql);
-//    reg_cleanup_mysql_result(r->pool, res_set);
     apr_pool_cleanup_register(r->pool, (void *)res_set, cleanup_mysql_result, &apr_pool_cleanup_null);
 
     ap_unblock_alarms();
@@ -339,7 +338,6 @@ static int myvhost_translate(request_rec *r)
     if (!row) {
         ap_block_alarms();
         {
-//            run_cleanup_mysql_result(r->pool, res_set);
 	    apr_pool_cleanup_run(r->pool, (void *)res_set, &cleanup_mysql_result);
 #ifdef WITH_CACHE
             cache_vhost_add(cfg, r->hostname, 0, 0,
@@ -428,7 +426,6 @@ static int myvhost_translate(request_rec *r)
 
         ap_block_alarms(); /* to avoid memleaks */
         {
-//		run_cleanup_mysql_result(r->pool, res_set);
 	    apr_pool_cleanup_run(r->pool, (void *)res_set, &cleanup_mysql_result);
 	}
         ap_unblock_alarms();
