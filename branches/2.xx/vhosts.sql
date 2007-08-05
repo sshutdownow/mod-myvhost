@@ -1,5 +1,6 @@
 /*
 * Copyright (c) 2005-2007 Igor Popov <igorpopov@newmail.ru> 
+*
 * $Id$
 *
 */
