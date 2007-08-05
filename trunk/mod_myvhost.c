@@ -14,7 +14,7 @@
  * under the License.
  */
 
-static const char cvsid[] = "$$";
+static const char cvsid[] = "$Id$";
 
 
 #define CORE_PRIVATE
