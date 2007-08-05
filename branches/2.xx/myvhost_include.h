@@ -17,7 +17,12 @@
 #ifndef __MYVHOST_INCLUDE_H__
 #define __MYVHOST_INCLUDE_H__
 
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#include "ap_config.h"
 #include "httpd.h"
+#include "http_request.h"
 #include "http_config.h"
 #include "http_core.h"
 #include "http_log.h"
@@ -26,8 +31,10 @@
 #include "http_conf_globals.h"
 #include "util_script.h"
 
-#include "ap_alloc.h"
-#include "ap_hash.h" /* backported from apr-1.2.2 */
+#include "apr.h"
+#include "apr_pools.h"
+#include "apr_strings.h"
+#include "apr_hash.h"
 
 #include <mysql.h>
 #include "escape_sql.h"
@@ -51,8 +58,8 @@ typedef struct {
 
 #ifdef WITH_CACHE
     int cache_enabled;
-    ap_hash_t *cache;
-    ap_pool *pool;
+    apr_hash_t *cache;
+    apr_pool_t *pool;
 #endif /* WITH_CACHE */
 } myvhost_cfg_t;
 
