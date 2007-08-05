@@ -7,8 +7,8 @@
 NAME = myvhost
 APACHE_MODULE = mod_myvhost.so
 APXS = apxs
-SRCS = mod_myvhost.c mod_myvhost_cache.c ap_hash.c escape_sql.c
-OBJS = mod_myvhost.o mod_myvhost_cache.o ap_hash.o escape_sql.o
+SRCS = mod_myvhost.c mod_myvhost_cache.c escape_sql.c
+OBJS = mod_myvhost.o mod_myvhost_cache.o escape_sql.o
 
 RM = rm -f
 LN = ln -sf
