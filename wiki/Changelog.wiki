@@ -1,11 +1,4 @@
-#Changelog.
-
-= Introduction =
-
-Add your content here.
-
-
-= Details =
+Changelog:
 
 05 Dec 2006
     Just changed from using Apache's ap_psprintf to libc's snprintf,
@@ -25,3 +18,5 @@ Add your content here.
 	
 19 March 2006
     The first public release
+
+
