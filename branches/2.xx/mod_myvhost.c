@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005-2006 Igor Popov <igorpopov@newmail.ru>
+ * Copyright (c) 2005-2007 Igor Popov <igorpopov@newmail.ru>
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy
@@ -30,24 +30,24 @@ static int myvhost_setup(server_rec *s)
     cfg->mysql_connected = 0;
 
     if (!cfg->myvhost_enabled) {
-	ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, s,
+	ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, 0, s,
 		"module is disabled, but tried to connect to MySQL server");
 	return -1;
     }
     /* This should never ever ever happen */
     if (!cfg->mysql) {
-	ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, s, "MySQL handle is NULL");
+	ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, s, "MySQL handle is NULL");
 	return -1;
     }
     if (!mysql_real_connect(cfg->mysql, cfg->mysql_host, cfg->mysql_user,
 			    cfg->mysql_pass, cfg->mysql_dbname, cfg->mysql_inetsock, cfg->mysql_unixsock, 0)) {
-	ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, s,
+	ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, s,
 		     "failed to connect to database '%s': %s", cfg->mysql_dbname, mysql_error(cfg->mysql));
 	cfg->mysql_connected = 0;
 	return -1;
     }
 #ifdef DEBUG
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, s, "mod_myvhost connected to MySQL");
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, s, "mod_myvhost connected to MySQL");
 #endif
     cfg->mysql_connected = 1;
 
@@ -104,7 +104,7 @@ static void myvhost_child_init(server_rec *s, pool *p)
     mysql_init(cfg->mysql);
     myvhost_setup(s);
 #ifdef DEBUG
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, s, "child init");
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, s, "child init");
 #endif
 }
 
@@ -117,10 +117,10 @@ static void myvhost_child_exit(server_rec *s, pool *p)
 	mysql_close(cfg->mysql);
     }
 #ifdef WITH_CACHE
-    ap_destroy_pool(cfg->pool);
+    apr_destroy_pool(cfg->pool);
 #endif    
 #ifdef DEBUG
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, s, "child exit");
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, s, "child exit");
 #endif
 }
 
@@ -154,10 +154,10 @@ static void default_host(myvhost_cfg_t *cfg, core_server_config *scfg, request_r
 
 #ifdef WITH_PHP
     if (zend_restore_ini_entry("open_basedir", sizeof("open_basedir"), PHP_INI_STAGE_RUNTIME) < 0) {
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r, "zend_restore_ini_entry() failed");
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, 0, r, "zend_restore_ini_entry() failed");
     }
     if (zend_restore_ini_entry("open_basedir", sizeof("safe_mode"), PHP_INI_STAGE_RUNTIME) < 0) {
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r, "zend_restore_ini_entry() failed");
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, 0, r, "zend_restore_ini_entry() failed");
     }
 #endif
 }
@@ -196,40 +196,40 @@ static int myvhost_translate(request_rec *r)
 
     if (r->main) {
 #ifdef DEBUG
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "declined: subrequest");
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r, "declined: subrequest");
 #endif
 	return DECLINED;
     }
 
     if (!cfg->mysql_vhost_query) {	/* it is seemed to be redundant, but
 					 * it should be there */
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, r, "declined: !mysql_vhost_query");
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r, "declined: !mysql_vhost_query");
 	return DECLINED;
     }
 
     if (!r->hostname) {
 #ifdef DEBUG
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
 		      "declined: no hostname found in request");
 #endif
 	return DECLINED;
     }
 
     if (ap_ind(r->hostname, '\'') != -1 || ap_ind(r->hostname, '\\') != -1) {
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
 	    "declined: invalid character(s) in hostname '%s'", r->hostname);
 	return DECLINED;
     }
 
     if (r->uri == 0 || r->uri[0] != '/') {
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
 		      "declined: uri has no leading '/'");
 	return DECLINED;
     }
 
     if (!strcasecmp(r->hostname, cfg->default_host)) {
 #ifdef DEBUG
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "declined: request to default host");
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r, "declined: request to default host");
 #endif
 	default_host(cfg, scfg, r);
 	return DECLINED;
@@ -248,14 +248,14 @@ static int myvhost_translate(request_rec *r)
 	    gid = vhost->gid;
 #endif
 #ifdef DEBUG
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
+	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
 		  "cache: vhost '%s' found in positive cache", r->hostname);
 #endif
 	    goto VHOST_FOUND;	/* I don't like goto, but sometimes it can be
 				 * usefull. */
 	} else if (vhost->hits < 0) {
 #ifdef DEBUG
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
+	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
 	       "declined: vhost '%s' found in negative cache", r->hostname);
 #endif
 	    default_host(cfg, scfg, r);
@@ -286,7 +286,7 @@ static int myvhost_translate(request_rec *r)
 
     if (mysql_real_query(cfg->mysql, query, strlen(query))) {	/* query failed */
 	ap_unblock_alarms();
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r,
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, 0, r,
 		      "declined: error in mysql query '%s' %s", query, mysql_error(cfg->mysql));
 	ap_table_setn(r->subprocess_env, "MYVHOST_ERR", "MYSQL_QUERY_ERROR");
 	return DECLINED;
@@ -315,13 +315,13 @@ static int myvhost_translate(request_rec *r)
 	}
 	ap_unblock_alarms();
 #if defined(DEBUG) && defined(WITH_CACHE)
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
 		  "cache: vhost '%s' added to negative cache", r->hostname);
 #endif
 	ap_table_setn(r->subprocess_env, "MYVHOST_ERR", "VHOST_NOT_FOUND");
 	default_host(cfg, scfg, r);
 #ifdef DEBUG
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
 		      "declined: hostname '%s' not found", r->hostname);
 #endif
 	return DECLINED;
@@ -344,7 +344,7 @@ static int myvhost_translate(request_rec *r)
 
 	switch (num_fields_fetched) {
 	default:
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r,
+	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, 0, r,
 			  "there are too many fields (%d) in mysql response",
 			  num_fields_fetched);
 #ifdef WITH_UID_GID
@@ -353,7 +353,7 @@ static int myvhost_translate(request_rec *r)
 		gid = ap_strtol(row[UID_GID_INDEX-1], 0, 10);
 		if (!gid) {
 		    gid = ap_group_id;
-		    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
+		    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
 				    "trying to set gid to zero");
 		}
 	    }
@@ -363,7 +363,7 @@ static int myvhost_translate(request_rec *r)
 		uid = ap_strtol(row[UID_GID_INDEX-2], 0, 10);
 		if (!uid) {
 		    uid = ap_group_id;
-		    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
+		    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
 				    "trying to set uid to root");
 		}
 	    }
@@ -394,14 +394,14 @@ static int myvhost_translate(request_rec *r)
 	ap_unblock_alarms();
 
 	if (!rootdir) {
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, r,
+	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
 			"declined: no rootdir for vhost '%s'", r->hostname);
 	    return DECLINED;
 	}
 
 VHOST_FOUND:
 	if (!ap_is_directory(rootdir)) {
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
+	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
 		       "declined: rootdir '%s' is not dir at all", rootdir);
 	    ap_table_setn(r->subprocess_env, "MYVHOST_ERR", "WRONG_ROOTDIR");
 	    return DECLINED;
@@ -438,7 +438,7 @@ VHOST_FOUND:
 	    }
 	    ap_unblock_alarms();
 #ifdef DEBUG
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
+	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
 		  "cache: vhost '%s' added to positive cache", r->hostname);
 #endif /* DEBUG */
 	}
@@ -451,7 +451,7 @@ VHOST_FOUND:
 	    r->finfo = finfo;
 	} else {
 #ifdef DEBUG
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
+	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
 			  "declined: file '%s' doesn't exist", r->filename);
 #endif /* DEBUG */
 	    return DECLINED;
@@ -460,18 +460,18 @@ VHOST_FOUND:
 #ifdef WITH_PHP
 	ap_table_setn(r->subprocess_env, "PHP_DOCUMENT_ROOT", rootdir);
 	if (zend_alter_ini_entry("open_basedir", sizeof("open_basedir"), rootdir, strlen(rootdir), PHP_INI_SYSTEM, PHP_INI_STAGE_RUNTIME) < 0) {
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r, "zend_alter_ini_entry() set 'open_basedir' failed");
+	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'open_basedir' failed");
 	}
 
 	if (zend_alter_ini_entry("safe_mode", sizeof("safe_mode"), "1", 1, PHP_INI_SYSTEM, PHP_INI_STAGE_RUNTIME) < 0) {
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r, "zend_alter_ini_entry() set 'safe_mode' failed");
+	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'safe_mode' failed");
 	}
 
 	if (php_ini_conf) {	/* there is an extra php config */
 	    char *linend, *value;
 
 #ifdef DEBUG
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "php config is '%s'", php_ini_conf);
+	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r, "php config is '%s'", php_ini_conf);
 #endif
 	    /* Of course strtok_r is better, but it is not standard */
 	    while ((linend = strchr(php_ini_conf, ';')) != NULL) {
@@ -480,10 +480,10 @@ VHOST_FOUND:
 		if ((value = strchr(php_ini_conf, '=')) != NULL) {
 		    *value++ = '\0';
 #ifdef DEBUG
-		    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "setting '%s' to '%s'", php_ini_conf, value);
+		    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r, "setting '%s' to '%s'", php_ini_conf, value);
 #endif
 		    if (zend_alter_ini_entry(php_ini_conf, strlen(php_ini_conf) + 1, value, strlen(value), PHP_INI_SYSTEM, PHP_INI_STAGE_RUNTIME) < 0) {
-			ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r, "zend_alter_ini_entry() failed");
+			ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, 0, r, "zend_alter_ini_entry() failed");
 		    }
 		}
 		if (linend) {
@@ -494,23 +494,23 @@ VHOST_FOUND:
 	    if (php_ini_conf && *php_ini_conf && (value = strchr(php_ini_conf, '=')) != NULL) {
 		*value++ = '\0';
 #ifdef DEBUG
-		ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "setting php param '%s' to value '%s'", php_ini_conf, value);
+		ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r, "setting php param '%s' to value '%s'", php_ini_conf, value);
 #endif
 		if (zend_alter_ini_entry(php_ini_conf, strlen(php_ini_conf) + 1, value, strlen(value), PHP_INI_SYSTEM, PHP_INI_STAGE_RUNTIME) < 0) {
-		    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r, "zend_alter_ini_entry() failed");
+		    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, 0, r, "zend_alter_ini_entry() failed");
 		}
 	    }
 	}
 #endif /* WITH_PHP */
 
 #ifdef DEBUG
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "OK: translate '%s%s' to '%s'", r->hostname, r->uri, r->filename);
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r, "OK: translate '%s%s' to '%s'", r->hostname, r->uri, r->filename);
 #endif
 	return OK;
     }
     /* not for us */
 #ifdef DEBUG
-    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "declined");
+    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r, "declined");
 #endif
     return DECLINED;
 }
