@@ -19,6 +19,7 @@ static const char cvsid[] = "$Id$";
 #ifdef WITH_CACHE
 
 #include "myvhost_include.h"
+#include "mod_myvhost_cache.h"
 
 p_cache_t cache_vhost_find(myvhost_cfg_t *cfg, const char *hostname)
 {
