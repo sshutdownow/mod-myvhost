@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="eng">
+<head>
+	<link rel="stylesheet" type="text/css" href="../my.css" title="webstyle" />
+	<title>mod_myvhost</title>
+</head>
+
+<body>
+    <h1 id='logo'>mod_myvhost</h1>
+ 
+	<div class="navigation">
+	      <a href="index.html">main</a>
+	    | <a href="download.html">download</a>
+	    | documentation
+	    | <a href="changelog.html">changelog</a>
+	</div>
+
+	<div class="line"></div>
+
+	<div class="mainbody">
+ 	<h3><a hRef='download.html'>Current version</a>: 0.13</h3>
+	
+	<h3>Installation instructions:</h3>
+	<h4>Prerequisities:</h4>
+	<p>This packages are required for successfull compilation:</p>
+	    <table border='0'>
+		<tr><td>apache13-dev</td></tr>
+		<tr><td>mysql-dev</td></tr>
+	    </table>
+	<h4>Download source code:</h4>
+	    The latest version of mod_myvhost <a hRef='download.html'>is here</a>
+	<h4>Decompress the source:</h4>
+	    <code>tar -xzvf mod_myvhost-x.xx.tar.gz</code>
+	<h4>Building mod_myvhost:</h4>
+    	    just type <code>make</code>
+	    <br />
+	    If you do not want php support than remove -DWITH_PHP from CFLAGS in Makefile.
+	    If you want to test module's internal caching than add -DWITH_CACHE to CFLAGS in Makefile.
+	<h4>Install mod_myvhost:</h4>
+	    <code>make install</code> (as root)
+	<h4>MySQL:</h4>
+	    Now it is time to create database that will be used to store vhost configurations.
+	    You can use vhosts.sql file as example.
+	    <pre>
+CREATE DATABASE `hosting`;
+USE `hosting`;
+	    
+CREATE TABLE `vhosts` (
+    `vhost` varchar(255) NOT NULL default '',
+    `enabled` enum('yes','no') NOT NULL default 'no',
+    `rootdir` varchar(255) NOT NULL default '',
+    `admin` varchar(255) default '',
+    `extra_php_config` text,
+    UNIQUE KEY `vhostname` (`vhost`),
+    KEY `enabled` (`enabled`)
+) TYPE=MyISAM COMMENT='vhosts';
+					
+GRANT SELECT ON hosting.vhosts TO 'nonpriv'@'localhost' IDENTIFIED BY 'M3Ga PaSsVVd';
+					
+INSERT INTO `vhosts` VALUES ('w_3.vhost.net', 'yes', '/var/www/vhosts/01', 'w_3@vhost.net', 'enable_dl=0');
+INSERT INTO `vhosts` VALUES ('www.vhost.net', 'yes', '/var/www/vhosts/02', 'www@vhost.net', '');
+	    </pre>					
+	    Create database and table:
+	    <br />
+	    <code>mysql -u root -p &lt; vhosts.sql</code>
+	<h4>Apache:</h4>
+	    Edit apache config, you may use httpd.conf.add as example, make shure that mod_myvhost.so is loaded after libphp4.so.
+	    <pre>
+&lt;IfModule mod_myvhost.c&gt;
+    MyVhostOn		on
+    MyVhostDefaultHost	"www.notvhost.net"
+    MyVhostDefaultRoot	"/var/www/html"
+    MyVhostDbHost	"localhost"
+    MyVhostDbSocket	"/tmp/mysql.sock"
+    MyVhostDbUser	"nonpriv"
+    MyVhostDbPass	"M3Ga PaSsVVd"
+    MyVhostDbName	"hosting"
+    MyVhostQuery	"SELECT rootdir,admin,extra_php_config FROM vhosts WHERE vhost='%s' AND enabled='yes'"
+    &ltDirectory "/var/www/vhosts"&gt
+        Options Indexes
+        AllowOverride None
+        Order allow,deny
+        Allow from all
+    &lt;/Directory&gt;
+&lt;/IfModule&gt;
+	    </pre>
+	    <p>
+	    The most important parameter that you should take into account is <em>MyVhostQuery</em>,
+	    it must contain one and only one %s that is substituted by vhostname from http request.
+	    If hostname is absent or no vhost found, than request served by default vhost,
+	    that is defined by <em>MyVhostDefaultHost</em> and <em>MyVhostDefaultRoot</em>.
+	    </p>
+	    <p>
+	    The module expects MySQL to return up to three fields:
+	    the first one is treated as absolute path of vhost's server root (magically becomes <em>open_basedir</em>),
+	    than goes vhost's admin (email) and the third (if exists) is pairs of php variables and their
+	    values delimeted by equality sign, pairs in turn are separated by semicolon, for boolean variables you should use 1 and 0.
+	    </p>
+	<h4>Make it all working:</h4>    		
+	    Just restart apache:
+	    <br />
+	    <code>apachectl stop; apachectl start</code>
+	    <br />
+	    So, it should work.
+	    <br />
+	    This module is tested to compile and work on FreeBSD and Linux with MySQL 4.0.xx, 4.1.xx and 5.0.xx.
+	<h4>TODO</h4>
+	    <p>
+	    MySQL flushes query cache whenever that table is changed. If updates
+	    are often, peformane decrease significantly, to achive good perfomance,
+	    module should use internal caching of MySQL responses (positive and negative).
+            </p>
+	    <p>
+	    At present time module already has ability of internal caching, so,
+	    next step will be support for global caching.
+            </p>
+	</div>
+	<div class="line"></div>
+	<div class="copyright">Copyright &copy; 2005-2006
+	    <a href="mailto:igorpopov@newmail.ru">Igor Popov</a>
+	</div>
+<!--
+	<div class="copyright">
+	<h4>License and Copyright:</h4>
+<pre>
+Copyright &copy; 2005 Igor Popov &lt;<a hRef='mailto:igorpopov@newmail.ru'>igorpopov@newmail.ru</a>&gt;
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+</pre>
+	</div>
+-->
+</body>
+</html>
