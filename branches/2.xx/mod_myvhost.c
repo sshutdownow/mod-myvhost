@@ -41,6 +41,8 @@ static const char cvsid[] = "$Id$";
 #include "myvhost_include.h"
 #include "mod_myvhost_cache.h"
 #include "mod_myvhost_php.h"
+#include "escape_sql.h"
+
 
 module AP_MODULE_DECLARE_DATA myvhost_module;
 
@@ -84,7 +86,6 @@ static int myvhost_setup(server_rec *s)
 static void *myvhost_create_server_config(apr_pool_t *p, server_rec *s)
 {
     myvhost_cfg_t *cfg = (myvhost_cfg_t *)apr_pcalloc(p, sizeof(myvhost_cfg_t));
-
     return (void *)cfg;
 }
 
@@ -118,6 +119,25 @@ static void *myvhost_merge_server_config(apr_pool_t *p, void *base, void *overri
     return new_conf;
 }
 
+
+static apr_status_t myvhost_child_exit(void *s)
+{
+
+    myvhost_cfg_t *cfg =
+        ap_get_module_config( ((server_rec*)s)->module_config, &myvhost_module);
+
+    if (cfg->mysql_connected) {
+        mysql_close(cfg->mysql);
+    }
+#ifdef WITH_CACHE
+    apr_destroy_pool(cfg->pool);
+#endif
+#ifdef DEBUG
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, s, "child exit");
+#endif
+    return APR_SUCCESS;
+}
+
 static void myvhost_child_init(apr_pool_t *p, server_rec *s)
 {
     myvhost_cfg_t *cfg =
@@ -130,43 +150,21 @@ static void myvhost_child_init(apr_pool_t *p, server_rec *s)
     cfg->mysql = apr_pcalloc(p, sizeof(MYSQL));
     mysql_init(cfg->mysql);
     myvhost_setup(s);
+    
+    apr_pool_cleanup_register(p, s, myvhost_child_exit, myvhost_child_exit);
+				 
 #ifdef DEBUG
     ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, s, "child init");
 #endif
 }
 
-static void myvhost_child_exit(server_rec *s, apr_pool_t *p)
-{
-    myvhost_cfg_t *cfg =
-        ap_get_module_config(s->module_config, &myvhost_module);
-
-    if (cfg->mysql_connected) {
-        mysql_close(cfg->mysql);
-    }
-#ifdef WITH_CACHE
-    apr_destroy_pool(cfg->pool);
-#endif
-#ifdef DEBUG
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, s, "child exit");
-#endif
-}
-
-static void cleanup_mysql_result(void *result)
+static  apr_status_t cleanup_mysql_result(void *result)
 {
     if (result) {
         mysql_free_result((MYSQL_RES *) result);
         result = 0;
     }
-}
-
-static void reg_cleanup_mysql_result(apr_pool_t *p, MYSQL_RES * result)
-{
-    apr_pool_cleanup_register(p, (void *)result, cleanup_mysql_result, &apr_pool_cleanup_null);
-}
-
-static void run_cleanup_mysql_result(apr_pool_t *p, MYSQL_RES * result)
-{
-    apr_pool_cleanup_run(p, (void *)result, &cleanup_mysql_result);
+    return APR_SUCCESS;
 }
 
 static void default_host(myvhost_cfg_t *cfg, core_server_config *scfg, request_rec *r)
@@ -321,7 +319,8 @@ static int myvhost_translate(request_rec *r)
     }
     /* we have data */
     res_set = mysql_store_result(cfg->mysql);
-    reg_cleanup_mysql_result(r->pool, res_set);
+//    reg_cleanup_mysql_result(r->pool, res_set);
+    apr_pool_cleanup_register(r->pool, (void *)res_set, cleanup_mysql_result, &apr_pool_cleanup_null);
 
     ap_unblock_alarms();
 
@@ -329,7 +328,8 @@ static int myvhost_translate(request_rec *r)
     if (!row) {
         ap_block_alarms();
         {
-            run_cleanup_mysql_result(r->pool, res_set);
+//            run_cleanup_mysql_result(r->pool, res_set);
+	    apr_pool_cleanup_run(r->pool, (void *)res_set, &cleanup_mysql_result);
 #ifdef WITH_CACHE
             cache_vhost_add(cfg, r->hostname, 0, 0,
 #ifdef WITH_PHP
@@ -417,8 +417,9 @@ static int myvhost_translate(request_rec *r)
 
         ap_block_alarms(); /* to avoid memleaks */
         {
-            run_cleanup_mysql_result(r->pool, res_set);
-        }
+//		run_cleanup_mysql_result(r->pool, res_set);
+	    apr_pool_cleanup_run(r->pool, (void *)res_set, &cleanup_mysql_result);
+	}
         ap_unblock_alarms();
 
         if (!rootdir) {
@@ -697,8 +698,8 @@ module AP_MODULE_DECLARE_DATA myvhost_module = {
     STANDARD20_MODULE_STUFF,
     NULL,                       /* create per-dir    config structures */
     NULL,                       /* merge  per-dir    config structures */
-    myvhost_create_server_config,     /* create per-server config structures */
-    NULL,			/* merge  per-server config structures */
+    myvhost_create_server_config, /* create per-server config structures */
+    myvhost_merge_server_config, /* merge  per-server config structures */
     myvhost_cmds,             /* table of config file commands       */
     register_hooks              /* register hooks                      */
 };

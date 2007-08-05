@@ -34,4 +34,4 @@ install: all
 	$(APXS) -i -a -n $(NAME) $(APACHE_MODULE)
 
 clean:
-	$(RM) $(OBJS) $(APACHE_MODULE)
+	$(RM) $(OBJS) $(APACHE_MODULE) *.slo *.lo
