@@ -130,7 +130,7 @@ static apr_status_t myvhost_child_exit(void *s)
         mysql_close(cfg->mysql);
     }
 #ifdef WITH_CACHE
-    apr_destroy_pool(cfg->pool);
+    apr_pool_destroy(cfg->pool);
 #endif
 #ifdef DEBUG
     ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, s, "child exit");
