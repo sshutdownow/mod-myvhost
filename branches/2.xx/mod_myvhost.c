@@ -16,12 +16,15 @@
 
 static const char cvsid[] = "$Id$";
 
+#define ap_block_alarms
+#define ap_unblock_alarms
 
 #define CORE_PRIVATE
 
 #include "myvhost_include.h"
 
 module AP_MODULE_DECLARE_DATA myvhost_module;
+
 
 static int myvhost_setup(server_rec *s)
 {
@@ -400,7 +403,7 @@ static int myvhost_translate(request_rec *r)
         }
 
 VHOST_FOUND:
-        if (!ap_is_directory(rootdir)) {
+        if (!ap_is_directory(r->pool, rootdir)) {
             ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
                           "declined: rootdir '%s' is not dir at all", rootdir);
             ap_table_setn(r->subprocess_env, "MYVHOST_ERR", "WRONG_ROOTDIR");
@@ -609,7 +612,7 @@ static const char *set_default_root(cmd_parms *cmd, void *__unused__, char *arg)
     if (!arg || !strlen(arg)) {
         return "default_root must be set";
     }
-    if (!ap_is_directory(arg)) {
+    if (!ap_is_directory(cmd->pool, arg)) {
         return "default_root must be a directory";
     }
     cfg->default_root = ap_pstrdup(cmd->pool, arg);
