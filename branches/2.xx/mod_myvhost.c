@@ -560,7 +560,7 @@ VHOST_FOUND:
 /*
  * config stuff
  */
-static const char *set_host(cmd_parms *cmd, void *p1 __unused, char *arg)
+static const char *set_host(cmd_parms *cmd, void *p1 __unused, const char *arg)
 {
     myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
                          &myvhost_module);
@@ -572,7 +572,7 @@ static const char *set_host(cmd_parms *cmd, void *p1 __unused, char *arg)
     return NULL;
 }
 
-static const char *set_user(cmd_parms *cmd, void *p1 __unused, char *arg)
+static const char *set_user(cmd_parms *cmd, void *p1 __unused, const char *arg)
 {
     myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
                          &myvhost_module);
@@ -584,7 +584,7 @@ static const char *set_user(cmd_parms *cmd, void *p1 __unused, char *arg)
     return NULL;
 }
 
-static const char *set_pass(cmd_parms *cmd, void *p1 __unused, char *arg)
+static const char *set_pass(cmd_parms *cmd, void *p1 __unused, const char *arg)
 {
     myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
                          &myvhost_module);
@@ -596,7 +596,7 @@ static const char *set_pass(cmd_parms *cmd, void *p1 __unused, char *arg)
     return NULL;
 }
 
-static const char *set_dbname(cmd_parms *cmd, void *p1 __unused, char *arg)
+static const char *set_dbname(cmd_parms *cmd, void *p1 __unused, const char *arg)
 {
     myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
                          &myvhost_module);
@@ -608,7 +608,7 @@ static const char *set_dbname(cmd_parms *cmd, void *p1 __unused, char *arg)
     return NULL;
 }
 
-static const char *set_socket(cmd_parms *cmd, void *p1 __unused, char *arg)
+static const char *set_socket(cmd_parms *cmd, void *p1 __unused, const char *arg)
 {
     myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
                          &myvhost_module);
@@ -625,7 +625,7 @@ static const char *set_socket(cmd_parms *cmd, void *p1 __unused, char *arg)
     return NULL;
 }
 
-static const char *set_myquery(cmd_parms *cmd, void *p1 __unused, char *arg)
+static const char *set_myquery(cmd_parms *cmd, void *p1 __unused, const char *arg)
 {
     myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
 
@@ -644,7 +644,7 @@ static const char *set_module_onoff(cmd_parms *cmd, void *p1 __unused, int flag)
     return NULL;
 }
 
-static const char *set_default_root(cmd_parms *cmd, void *p1 __unused, char *arg)
+static const char *set_default_root(cmd_parms *cmd, void *p1 __unused, const char *arg)
 {
     myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
 
@@ -658,7 +658,7 @@ static const char *set_default_root(cmd_parms *cmd, void *p1 __unused, char *arg
     return NULL;
 }
 
-static const char *set_default_host(cmd_parms *cmd, void *p1 __unused, char *arg)
+static const char *set_default_host(cmd_parms *cmd, void *p1 __unused, const char *arg)
 {
     myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
 
