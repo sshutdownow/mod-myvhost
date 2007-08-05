@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="eng">
+
+    <head>
+	<link rel="stylesheet" type="text/css" href="../my.css" title="webstyle" />
+	<title>mod_myuserdir</title>
+    </head>
+
+    <body>
+	<h1 id='logo'>mod_myvhost</h1>
+	<div class="navigation">
+	    main
+	    | <a href="download.html">download</a>
+	    | <a href="documentation.html">documentation</a>
+	    | <a href="changelog.html">changelog</a>
+	</div>
+
+	<div class="line"></div>
+
+	<div class="mainbody">
+
+	    <em>mod_myvhost</em> is <a href="http://httpd.apache.org/">Apache 1.3.xx</a> module for dynamically configured name based mass virtual hosting with <a href="http://www.php.net/">php</a>, virtual host's configurations and <a href="http://www.php.net/">php</a> settings are stored in MySQL database.
+
+	    <ul>
+		<li>
+		    No need to have every vhost in apache's configuration file,
+		    no need to restart apache after configuration changed
+		    (vhost added|deleted, vhost rootdir changed, vhost [un]blocked...).
+		</li>
+		<li>
+    		    After all, it is capable to change settings of PHP4 dynamically
+		    (if php is loadable module or it is linked with apache) for any
+		    vhost. By default, it sets open_basedir as vhost's rootdir to
+		    prevent user from stoling files from other users and from your
+		    server, but you have ability to  change almost any parameter
+		    that exists in php.ini, for example, you can turn on safe_mode
+		    or register_globals for particular vhost, if it has old php
+		    scripts that use global variables.
+		</li>
+		<li>
+		    Module is redistributed under <a href="http://www.apache.org/licenses/LICENSE-2.0">Apache 2.0 License</a>.
+		</li>
+		<li>
+		    In present time module is beta quality, so it should not be
+		    used in production environment. You use it on your own risk.
+		</li>
+	    </ul>
+	</div>
+
+	<div class="line"></div>
+
+	<div class="copyright">Copyright &copy; 2005-2006
+		<a href="mailto:igorpopov@newmail.ru">Igor Popov</a>
+	</div>
+    </body>
+</html>
