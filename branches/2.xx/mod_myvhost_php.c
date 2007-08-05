@@ -14,9 +14,19 @@
  * under the License.
  */
 
-static const char cvsid[] = "$Id$";
-
 #include "mod_myvhost_php.h"
+
+#if !defined(__unused)
+
+#if __GNUC_PREREQ__(2, 7)
+#define __unused __attribute__((__unused__))
+#else
+#define __unused
+#endif
+
+#endif /* __unused */
+
+static const char __unused cvsid[] = "$Id$";
 
 #ifdef WITH_PHP
 

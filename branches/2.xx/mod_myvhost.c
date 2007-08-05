@@ -14,10 +14,6 @@
  * under the License.
  */
 
-static const char cvsid[] = "$Id$";
-
-#define ap_block_alarms()
-#define ap_unblock_alarms()
 
 #define CORE_PRIVATE
 
@@ -42,6 +38,21 @@ static const char cvsid[] = "$Id$";
 #include "mod_myvhost_cache.h"
 #include "mod_myvhost_php.h"
 #include "escape_sql.h"
+
+#if !defined(__unused)
+
+#if __GNUC_PREREQ__(2, 7)
+#define __unused __attribute__((__unused__))
+#else
+#define __unused
+#endif
+
+#endif /* __unused */
+
+#define ap_block_alarms()
+#define ap_unblock_alarms()
+
+static const char __unused cvsid[] = "$Id$";
 
 
 module AP_MODULE_DECLARE_DATA myvhost_module;
