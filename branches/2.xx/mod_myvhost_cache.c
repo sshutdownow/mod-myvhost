@@ -26,7 +26,7 @@ static const char __unused cvsid[] = "$Id$";
 p_cache_t cache_vhost_find(myvhost_cfg_t *cfg, const char *hostname)
 {
     p_cache_t vhost;
-    time_t cur;
+    apr_time_t cur;
     
     if (!cfg->cache_enabled) {
 	return NULL;
@@ -37,7 +37,7 @@ p_cache_t cache_vhost_find(myvhost_cfg_t *cfg, const char *hostname)
 	return NULL;
     }
 
-    cur = time(NULL);
+    cur = apr_time_now();
 
     if (vhost->hits > 0 && vhost->hits < 512 && vhost->access_time + 300 >= cur) {
 	vhost->hits++;
@@ -69,7 +69,7 @@ void cache_vhost_add(myvhost_cfg_t *cfg,
     }
 
     vhost = apr_pcalloc(cfg->pool, sizeof(cache_t));
-    vhost->access_time = time(NULL);
+    vhost->access_time = apr_time_now();
     vhost->root = apr_pstrdup(cfg->pool, root);
     vhost->admin = apr_pstrdup(cfg->pool, admin);
 #ifdef WITH_PHP

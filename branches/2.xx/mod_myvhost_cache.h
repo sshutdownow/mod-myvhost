@@ -27,7 +27,7 @@ typedef struct {
     char *php_ini_conf;
 #endif
     int hits; /* negative means vhost not found */
-    time_t access_time;
+    apr_time_t access_time;
 #ifdef WITH_UID_GID
     unsigned int uid;
     unsigned int gid;

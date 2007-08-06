@@ -37,6 +37,7 @@
 #include "apr_pools.h"
 #include "apr_strings.h"
 #include "apr_hash.h"
+#include "apr_time.h"
 
 #include <mysql.h>
 
