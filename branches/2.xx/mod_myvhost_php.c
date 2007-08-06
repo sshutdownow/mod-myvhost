@@ -14,17 +14,8 @@
  * under the License.
  */
 
+#include "myvhost_include.h"
 #include "mod_myvhost_php.h"
-
-#if !defined(__unused) 
-
-#if defined(__GNUC__) && (__GNUC__ > 2 || __GNUC__ == 2 && __GNUC_MINOR__ >= 7)
-#define __unused __attribute__((__unused__))
-#else
-#define __unused
-#endif
-
-#endif /* __unused */
 
 static const char __unused cvsid[] = "$Id$";
 

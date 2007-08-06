@@ -16,37 +16,11 @@
 
 #define CORE_PRIVATE
 
-#include "ap_config.h"
-#include "httpd.h"
-#include "http_request.h"
-#include "http_config.h"
-#include "http_core.h"
-#include "http_log.h"
-#include "http_main.h"
-#include "http_protocol.h"
-#include "util_script.h"
-
-#include "apr.h"
-#include "apr_pools.h"
-#include "apr_strings.h"
-#include "apr_hash.h"
-
-#include <mysql.h>
-
 #include "myvhost_include.h"
+#include "mod_myvhost.h"
 #include "mod_myvhost_cache.h"
 #include "mod_myvhost_php.h"
 #include "escape_sql.h"
-
-#if !defined(__unused)
-
-#if defined(__GNUC__) && (__GNUC__ > 2 || __GNUC__ == 2 && __GNUC_MINOR__ >= 7)
-#define __unused __attribute__((__unused__))
-#else
-#define __unused
-#endif
-
-#endif /* __unused */
 
 #define ap_block_alarms()
 #define ap_unblock_alarms()
@@ -122,9 +96,8 @@ static void *myvhost_merge_server_config(apr_pool_t *p, void *base, void *overri
     new_conf->default_root = base_conf->default_root;
 #ifdef WITH_CACHE
     new_conf->cache_enabled = (override_conf->cache_enabled == 1) ? 1 : 0;
-    new_conf->pool = ap_make_sub_pool(p);
-
-    new_conf->cache = ap_hash_overlay(new_conf->pool, override_conf->cache, base_conf->cache);
+    apr_pool_create(&new_conf->pool, p);
+    new_conf->cache = apr_hash_overlay(new_conf->pool, override_conf->cache, base_conf->cache);
 #endif
     return new_conf;
 }
@@ -154,8 +127,8 @@ static void myvhost_child_init(apr_pool_t *p, server_rec *s)
         ap_get_module_config(s->module_config, &myvhost_module);
 
 #ifdef WITH_CACHE
-    cfg->pool = ap_make_sub_pool(p);
-    cfg->cache = ap_hash_make(cfg->pool);
+    apr_pool_create(&cfg->pool, p);
+    cfg->cache = apr_hash_make(cfg->pool);
 #endif
     cfg->mysql = apr_pcalloc(p, sizeof(MYSQL));
     mysql_init(cfg->mysql);

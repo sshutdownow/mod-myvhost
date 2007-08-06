@@ -14,12 +14,14 @@
  * under the License.
  */
 
-static const char cvsid[] = "$Id$";
 
 #ifdef WITH_CACHE
 
 #include "myvhost_include.h"
+#include "mod_myvhost.h"
 #include "mod_myvhost_cache.h"
+
+static const char __unused cvsid[] = "$Id$";
 
 p_cache_t cache_vhost_find(myvhost_cfg_t *cfg, const char *hostname)
 {
@@ -68,10 +70,10 @@ void cache_vhost_add(myvhost_cfg_t *cfg,
 
     vhost = apr_pcalloc(cfg->pool, sizeof(cache_t));
     vhost->access_time = time(NULL);
-    vhost->root = ap_pstrdup(cfg->pool, root);
-    vhost->admin = ap_pstrdup(cfg->pool, admin);
+    vhost->root = apr_pstrdup(cfg->pool, root);
+    vhost->admin = apr_pstrdup(cfg->pool, admin);
 #ifdef WITH_PHP
-    vhost->php_ini_conf = ap_pstrdup(cfg->pool, php_ini_conf);
+    vhost->php_ini_conf = apr_pstrdup(cfg->pool, php_ini_conf);
 #endif
     vhost->hits = hits;
 #ifdef WITH_UID_GID

@@ -23,28 +23,31 @@
 #include <sys/types.h>
 #include <sys/cdefs.h>
 
-typedef struct {
+#include "ap_config.h"
+#include "httpd.h"
+#include "http_request.h"
+#include "http_config.h"
+#include "http_core.h"
+#include "http_log.h"
+#include "http_main.h"
+#include "http_protocol.h"
+#include "util_script.h"
 
-    int myvhost_enabled;
-    int mysql_connected;
+#include "apr.h"
+#include "apr_pools.h"
+#include "apr_strings.h"
+#include "apr_hash.h"
 
-    MYSQL *mysql;
-    char *mysql_host;
-    char *mysql_user;
-    char *mysql_pass;
-    char *mysql_dbname;
-    char *mysql_vhost_query;
-    char *mysql_unixsock;
-    unsigned short int mysql_inetsock;
+#include <mysql.h>
 
-    char *default_root;
-    char *default_host;
+#if !defined(__unused)
 
-#ifdef WITH_CACHE
-    int cache_enabled;
-    apr_hash_t *cache;
-    apr_pool_t *pool;
-#endif /* WITH_CACHE */
-} myvhost_cfg_t;
+#if defined(__GNUC__) && (__GNUC__ > 2 || __GNUC__ == 2 && __GNUC_MINOR__ >= 7)
+#define __unused __attribute__((__unused__))
+#else
+#define __unused
+#endif
+
+#endif /* __unused */
 
 #endif /* __MYVHOST_INCLUDE_H__ */

@@ -20,9 +20,6 @@
 #ifndef __MOD_MYVHOST_PHP_H__
 #define __MOD_MYVHOST_PHP_H__
 
-#include <sys/types.h>
-#include <sys/cdefs.h>
-
 #define PHP_INI_USER    (1<<0)
 #define PHP_INI_PERDIR  (1<<1)
 #define PHP_INI_SYSTEM  (1<<2)

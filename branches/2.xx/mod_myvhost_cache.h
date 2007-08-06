@@ -20,9 +20,6 @@
 #ifndef __MOD_MYVHOST_CACHE_H__
 #define __MOD_MYVHOST_CACHE_H__
 
-#include <sys/types.h>
-#include <sys/cdefs.h>
-
 typedef struct {
     char *root;
     char *admin;

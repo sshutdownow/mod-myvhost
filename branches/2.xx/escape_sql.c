@@ -14,10 +14,10 @@
   limitations under the License.
 */
 
-static const char cvsid[] = "$Id$";
-
+#include "myvhost_include.h"
 #include "escape_sql.h"
 
+static const char __unused cvsid[] = "$Id$";
 
 size_t escape_sql(const char *from, const size_t from_length, char *to, const size_t to_length)
 {
