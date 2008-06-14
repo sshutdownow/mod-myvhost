@@ -1,4 +1,5 @@
 #summary Install instructions.
+#labels Featured
 
 = Installation =
 
