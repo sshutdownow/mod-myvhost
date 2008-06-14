@@ -1,0 +1,4 @@
+#summary TODO
+
+ * Porting module to apache 2.2.xx
+ * Use mod_dbd instead of direct using MySQL.
