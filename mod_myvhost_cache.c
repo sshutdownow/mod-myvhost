@@ -14,34 +14,37 @@
  * under the License.
  */
 
-static const char cvsid[] = "$Id$";
 
 #ifdef WITH_CACHE
 
 #include "myvhost_include.h"
+#include "mod_myvhost.h"
+#include "mod_myvhost_cache.h"
+
+static const char __unused cvsid[] = "$Id$";
 
 p_cache_t cache_vhost_find(myvhost_cfg_t *cfg, const char *hostname)
 {
     p_cache_t vhost;
-    time_t cur;
+    apr_time_t cur;
     
     if (!cfg->cache_enabled) {
 	return NULL;
     }
 
-    vhost = ap_hash_get(cfg->cache, hostname, AP_HASH_KEY_STRING);
+    vhost = apr_hash_get(cfg->cache, hostname, APR_HASH_KEY_STRING);
     if (!vhost) {
 	return NULL;
     }
 
-    cur = time(NULL);
+    cur = apr_time_now();
 
     if (vhost->hits > 0 && vhost->hits < 512 && vhost->access_time + 300 >= cur) {
 	vhost->hits++;
     } else if (vhost->hits < 0 && vhost->hits > -256 && vhost->access_time + 180 >= cur) {
 	vhost->hits--;
     } else {
-	ap_hash_set(cfg->cache, hostname, AP_HASH_KEY_STRING, NULL);	/* delete hash entry */
+	apr_hash_set(cfg->cache, hostname, APR_HASH_KEY_STRING, NULL);	/* delete hash entry */
 	vhost = NULL;
     }
     return vhost;
@@ -65,30 +68,31 @@ void cache_vhost_add(myvhost_cfg_t *cfg,
 	return;
     }
 
-    vhost = ap_pcalloc(cfg->pool, sizeof(cache_t));
-    vhost->access_time = time(NULL);
-    vhost->root = ap_pstrdup(cfg->pool, root);
-    vhost->admin = ap_pstrdup(cfg->pool, admin);
+    vhost = apr_pcalloc(cfg->pool, sizeof(cache_t));
+    vhost->access_time = apr_time_now();
+    vhost->root = apr_pstrdup(cfg->pool, root);
+    vhost->admin = apr_pstrdup(cfg->pool, admin);
 #ifdef WITH_PHP
-    vhost->php_ini_conf = ap_pstrdup(cfg->pool, php_ini_conf);
+    vhost->php_ini_conf = apr_pstrdup(cfg->pool, php_ini_conf);
 #endif
     vhost->hits = hits;
 #ifdef WITH_UID_GID
     vhost->uid = uid;
     vhost->gid = gid;
 #endif
-    ap_hash_set(cfg->cache, hostname, AP_HASH_KEY_STRING, vhost);
+    apr_hash_set(cfg->cache, hostname, APR_HASH_KEY_STRING, vhost);
 }
 
-void cache_vhost_del(myvhost_cfg_t *cfg, ap_hash_t *cache, const char *host)
+void cache_vhost_del(myvhost_cfg_t *cfg, apr_hash_t *cache, const char *host)
 {
     if (!cfg->cache_enabled) {
 	return;
     }
-    ap_hash_set(cache, host, AP_HASH_KEY_STRING, NULL);	/* delete hash entry */
+    apr_hash_set(cache, host, APR_HASH_KEY_STRING, NULL);	/* delete hash entry */
 }
 
-void cache_vhost_flush(myvhost_cfg_t *cfg, ap_hash_t *cache, time_t older)
+/* TODO */
+void cache_vhost_flush(myvhost_cfg_t *cfg, apr_hash_t *cache, time_t older)
 {
     if (!cfg->cache_enabled) {
 	return;

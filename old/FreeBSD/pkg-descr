@@ -1,6 +1,0 @@
-Apache mass virtual hosting module.
-
-This module allows you to store your vhost's docroots and php settings in a database
-and extract them on the fly.
-
-WWW: http://igorpopov.newmail.ru
