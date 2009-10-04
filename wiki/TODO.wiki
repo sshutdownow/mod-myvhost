@@ -1,4 +1,5 @@
 #summary TODO
 
- * Porting module to apache 2.2.xx
- * Use mod_dbd instead of direct using MySQL.
+ * Porting module to Apache 2.2.xx.
+ * Use *mod_dbd* instead of direct using MySQL. Additionally, mod_dbd give us opportunity to use many different databases, not only MySQL. 
+ * Allow simultaneously using vhosts defined by original Apache's configuration file(s) and by *mod_myvhost*.
