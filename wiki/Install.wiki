@@ -1,5 +1,5 @@
 #summary Install instructions.
-#labels Featured
+#labels Featured,Phase-Deploy
 
 = Installation =
 
@@ -14,8 +14,8 @@ The latest version of *mod_myvhost* is [http://code.google.com/p/mod-myvhost/dow
 ===Decompress the source:===
 `tar -xzvf mod_myvhost-x.xx.tar.gz`
 ===Building mod_myvhost:===
-just type `make`
-If you do not want [http://www.php.net/ php] support than remove -DWITH_PHP from CFLAGS in Makefile. If you want to test module's internal caching than add -DWITH_CACHE to CFLAGS in Makefile.
+There are some settings available at compile time: if you do not want [http://www.php.net/ php] support than remove -DWITH_PHP from CFLAGS in Makefile. If you want to test module's internal caching than add -DWITH_CACHE to CFLAGS in Makefile.
+Now just type `make`.
 ===Install mod_myvhost:===
 `make install` (as root)
 ===MySQL:===
@@ -57,7 +57,7 @@ Edit apache configuration file, you may use _httpd.conf.add_ as example, make su
     MyVhostDbName	"hosting"
     MyVhostQuery	"SELECT rootdir,admin,extra_php_config FROM vhosts WHERE vhost='%s' AND enabled='yes'"
 #   MyVhostQuery	"SELECT rootdir,admin,extra_php_config FROM vhosts WHERE ((vhost='%1$s' OR valias='%1$s) AND enabled='yes')"
-    &ltDirectory "/var/www/vhosts">
+    <Directory "/var/www/vhosts">
         Options Indexes
         AllowOverride None
         Order allow,deny
