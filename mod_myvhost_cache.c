@@ -91,12 +91,16 @@ void cache_vhost_del(myvhost_cfg_t *cfg, apr_hash_t *cache, const char *host)
     apr_hash_set(cache, host, APR_HASH_KEY_STRING, NULL);	/* delete hash entry */
 }
 
-/* TODO */
+/* FIXME: older */
 void cache_vhost_flush(myvhost_cfg_t *cfg, apr_hash_t *cache, time_t older)
 {
     if (!cfg->cache_enabled) {
 	return;
     }
+    if (!cache) {
+	return;
+    }
+    apr_hash_clear(cache);
 }
 
 #endif /* WITH_CACHE */
