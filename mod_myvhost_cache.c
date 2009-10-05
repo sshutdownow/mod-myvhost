@@ -84,6 +84,7 @@ void cache_vhost_add(myvhost_cfg_t *cfg,
 
 void cache_vhost_del(myvhost_cfg_t *cfg, ap_hash_t *cache, const char *host)
 {
+    assert(cfg);
     if (!cfg->cache_enabled) {
 	return;
     }
@@ -96,7 +97,10 @@ void cache_vhost_flush(myvhost_cfg_t *cfg, ap_hash_t *cache, time_t older)
     if (!cfg->cache_enabled) {
 	return;
     }
-    apr_hash_clear(cache);
+    if (!cache) {
+	return;
+    }
+    ap_hash_clear(cache);
 }
 
 #endif /* WITH_CACHE */

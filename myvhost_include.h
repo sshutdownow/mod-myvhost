@@ -27,10 +27,12 @@
 #include "util_script.h"
 
 #include "ap_alloc.h"
-#include "ap_hash.h" /* backported from apr-1.2.2 */
+#include "ap_hash.h" /* backported from apr-1.3.8 */
 
 #include <mysql.h>
 #include "escape_sql.h"
+
+#include <assert.h>
 
 typedef struct {
 

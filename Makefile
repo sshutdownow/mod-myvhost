@@ -18,10 +18,10 @@ MYSQLCPPFLAGS = `mysql_config --include`
 MYSQLLDFLAGS  = `mysql_config --libs`
 
 CFLAGS = -Wc,-Wall $(MYSQLCPPFLAGS)
-CFLAGS+= -DWITH_PHP -DWITH_UID_GID
+CFLAGS+= -DWITH_PHP
 #CFLAGS+= -DWITH_PHP -DWITH_CACHE -DWITH_UID_GID
 CFLAGS+= -DDEBUG
-LDFLAGS = -W,l$(MYSQLLDFLAGS)
+LDFLAGS = -L/usr/local/lib/mysql -W,l$(MYSQLLDFLAGS)
 
 default: all
 

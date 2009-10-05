@@ -1,9 +1,9 @@
-/* Copyright 2000-2005 The Apache Software Foundation or its licensors, as
- * applicable.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+/* Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 
 #include <sys/types.h>
 #include <stdlib.h>
@@ -41,7 +42,7 @@ struct ap_hash_entry_t {
     ap_hash_entry_t *next;
     unsigned int      hash;
     const void       *key;
-    ssize_t	      klen;
+    ssize_t       klen;
     const void       *val;
 };
 
@@ -66,7 +67,7 @@ struct ap_hash_index_t {
  * collision rate.
  */
 struct ap_hash_t {
-    ap_pool_t          *pool;
+    ap_pool          *pool;
     ap_hash_entry_t   **array;
     ap_hash_index_t     iterator;  /* For ap_hash_first(NULL, ...) */
     unsigned int         count, max;
@@ -86,7 +87,7 @@ static ap_hash_entry_t **alloc_array(ap_hash_t *ht, unsigned int max)
    return ap_pcalloc(ht->pool, sizeof(*ht->array) * (max + 1));
 }
 
-API_EXPORT(ap_hash_t *) ap_hash_make(ap_pool_t *pool)
+API_EXPORT(ap_hash_t *) ap_hash_make(ap_pool *pool)
 {
     ap_hash_t *ht;
     ht = ap_palloc(pool, sizeof(ap_hash_t));
@@ -99,7 +100,7 @@ API_EXPORT(ap_hash_t *) ap_hash_make(ap_pool_t *pool)
     return ht;
 }
 
-API_EXPORT(ap_hash_t *) ap_hash_make_custom(ap_pool_t *pool,
+API_EXPORT(ap_hash_t *) ap_hash_make_custom(ap_pool *pool,
                                                ap_hashfunc_t hash_func)
 {
     ap_hash_t *ht = ap_hash_make(pool);
@@ -125,7 +126,7 @@ API_EXPORT(ap_hash_index_t *) ap_hash_next(ap_hash_index_t *hi)
     return hi;
 }
 
-API_EXPORT(ap_hash_index_t *) ap_hash_first(ap_pool_t *p, ap_hash_t *ht)
+API_EXPORT(ap_hash_index_t *) ap_hash_first(ap_pool *p, ap_hash_t *ht)
 {
     ap_hash_index_t *hi;
     if (p)
@@ -172,13 +173,14 @@ static void expand_array(ap_hash_t *ht)
     ht->max = new_max;
 }
 
-unsigned int ap_hashfunc_default(const char *char_key, ssize_t *klen)
+API_EXPORT_NONSTD(unsigned int) ap_hashfunc_default(const char *char_key,
+                                                      ssize_t *klen)
 {
     unsigned int hash = 0;
     const unsigned char *key = (const unsigned char *)char_key;
     const unsigned char *p;
     ssize_t i;
-
+    
     /*
      * This is the popular `times 33' hash algorithm which is used by
      * perl and also appears in Berkeley DB. This is one of the best
@@ -216,7 +218,7 @@ unsigned int ap_hashfunc_default(const char *char_key, ssize_t *klen)
      *
      *                  -- Ralf S. Engelschall <rse@engelschall.com>
      */
-
+     
     if (*klen == AP_HASH_KEY_STRING) {
         for (p = key; *p; p++) {
             hash = hash * 33 + *p;
@@ -278,7 +280,7 @@ static ap_hash_entry_t **find_entry(ap_hash_t *ht,
     return hep;
 }
 
-API_EXPORT(ap_hash_t *) ap_hash_copy(ap_pool_t *pool,
+API_EXPORT(ap_hash_t *) ap_hash_copy(ap_pool *pool,
                                         const ap_hash_t *orig)
 {
     ap_hash_t *ht;
@@ -360,17 +362,24 @@ API_EXPORT(unsigned int) ap_hash_count(ap_hash_t *ht)
     return ht->count;
 }
 
-API_EXPORT(ap_hash_t*) ap_hash_overlay(ap_pool_t *p,
+API_EXPORT(void) ap_hash_clear(ap_hash_t *ht)
+{
+    ap_hash_index_t *hi;
+    for (hi = ap_hash_first(NULL, ht); hi; hi = ap_hash_next(hi))
+        ap_hash_set(ht, hi->this->key, hi->this->klen, NULL);
+}
+
+API_EXPORT(ap_hash_t*) ap_hash_overlay(ap_pool *p,
                                           const ap_hash_t *overlay,
                                           const ap_hash_t *base)
 {
     return ap_hash_merge(p, overlay, base, NULL, NULL);
 }
 
-API_EXPORT(ap_hash_t *) ap_hash_merge(ap_pool_t *p,
+API_EXPORT(ap_hash_t *) ap_hash_merge(ap_pool *p,
                                          const ap_hash_t *overlay,
                                          const ap_hash_t *base,
-                                         void * (*merger)(ap_pool_t *p,
+                                         void * (*merger)(ap_pool *p,
                                                      const void *key,
                                                      ssize_t klen,
                                                      const void *h1_val,
