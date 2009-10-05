@@ -25,6 +25,7 @@ p_cache_t cache_vhost_find(myvhost_cfg_t *cfg, const char *hostname)
     p_cache_t vhost;
     time_t cur;
     
+    assert(cfg);
     if (!cfg->cache_enabled) {
 	return NULL;
     }
@@ -61,6 +62,7 @@ void cache_vhost_add(myvhost_cfg_t *cfg,
 {
     p_cache_t vhost;
 
+    assert(cfg);
     if (!cfg->cache_enabled) {
 	return;
     }
@@ -90,9 +92,11 @@ void cache_vhost_del(myvhost_cfg_t *cfg, ap_hash_t *cache, const char *host)
 
 void cache_vhost_flush(myvhost_cfg_t *cfg, ap_hash_t *cache, time_t older)
 {
+    assert(cfg);
     if (!cfg->cache_enabled) {
 	return;
     }
+    apr_hash_clear(cache);
 }
 
 #endif /* WITH_CACHE */
