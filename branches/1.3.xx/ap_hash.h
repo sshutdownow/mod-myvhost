@@ -1,9 +1,9 @@
-/* Copyright 2000-2005 The Apache Software Foundation or its licensors, as
- * applicable.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+/* Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -19,12 +19,20 @@
 
 /**
  * @file ap_hash.h
- * @brief APR Hash Tables
+ * @brief AP Hash Tables
  */
+
+#include "ap_alloc.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * @defgroup ap_hash Hash Tables
+ * @ingroup AP 
+ * @{
+ */
 
 /**
  * Declaration helper macro to construct apr_foo_pool_get()s.
@@ -37,33 +45,28 @@ extern "C" {
  * <pre>
  *    AP_POOL_DECLARE_ACCESSOR(file);
  * becomes:
- *    API_EXPORT(apr_pool_t *) apr_file_pool_get(apr_file_t *ob);
+ *    AP_DECLARE(apr_pool_t *) apr_file_pool_get(apr_file_t *ob);
  * </pre>
- * @remark Doxygen unwraps this macro (via doxygen.conf) to provide
+ * @remark Doxygen unwraps this macro (via doxygen.conf) to provide 
  * actual help for each specific occurance of apr_foo_pool_get.
  * @remark the linkage is specified for APR. It would be possible to expand
  *       the macros to support other linkages.
  */
 #define AP_POOL_DECLARE_ACCESSOR(type) \
-    API_EXPORT(ap_pool_t *) ap_##type##_pool_get \
+    API_EXPORT(ap_pool *) ap_##type##_pool_get \
         (const ap_##type##_t *the##type)
 
-/**
+/** 
  * Implementation helper macro to provide apr_foo_pool_get()s.
  *
  * In the implementation, the AP_POOL_IMPLEMENT_ACCESSOR() is used to
  * actually define the function. It assumes the field is named "pool".
  */
 #define AP_POOL_IMPLEMENT_ACCESSOR(type) \
-    API_EXPORT(ap_pool_t *) ap_##type##_pool_get \
+    API_EXPORT(ap_pool *) ap_##type##_pool_get \
             (const ap_##type##_t *the##type) \
         { return the##type->pool; }
 
-/**
- * @defgroup ap_hash Hash Tables
- * @ingroup APR
- * @{
- */
 
 /**
  * When passing a key to ap_hash_set or ap_hash_get, this value can be
@@ -77,7 +80,6 @@ extern "C" {
  */
 #define AP_HASH_KEY_STRING     (-1)
 
-typedef struct pool ap_pool_t;
 /**
  * Abstract type for hash tables.
  */
@@ -91,7 +93,7 @@ typedef struct ap_hash_index_t ap_hash_index_t;
 /**
  * Callback functions for calculating hash values.
  * @param key The key.
- * @param klen The length of the key, or AP_HASH_KEY_STRING to use the string
+ * @param klen The length of the key, or AP_HASH_KEY_STRING to use the string 
  *             length. If AP_HASH_KEY_STRING then returns the actual key length.
  */
 typedef unsigned int (*ap_hashfunc_t)(const char *key, ssize_t *klen);
@@ -99,14 +101,15 @@ typedef unsigned int (*ap_hashfunc_t)(const char *key, ssize_t *klen);
 /**
  * The default hash function.
  */
-unsigned int ap_hashfunc_default(const char *key, ssize_t *klen);
+API_EXPORT_NONSTD(unsigned int) ap_hashfunc_default(const char *key,
+                                                      ssize_t *klen);
 
 /**
  * Create a hash table.
  * @param pool The pool to allocate the hash table out of
  * @return The hash table just created
   */
-API_EXPORT(ap_hash_t *) ap_hash_make(ap_pool_t *pool);
+API_EXPORT(ap_hash_t *) ap_hash_make(ap_pool *pool);
 
 /**
  * Create a hash table with a custom hash function
@@ -114,7 +117,7 @@ API_EXPORT(ap_hash_t *) ap_hash_make(ap_pool_t *pool);
  * @param hash_func A custom hash function.
  * @return The hash table just created
   */
-API_EXPORT(ap_hash_t *) ap_hash_make_custom(ap_pool_t *pool,
+API_EXPORT(ap_hash_t *) ap_hash_make_custom(ap_pool *pool, 
                                                ap_hashfunc_t hash_func);
 
 /**
@@ -124,7 +127,7 @@ API_EXPORT(ap_hash_t *) ap_hash_make_custom(ap_pool_t *pool,
  * @return The hash table just created
  * @remark Makes a shallow copy
  */
-API_EXPORT(ap_hash_t *) ap_hash_copy(ap_pool_t *pool,
+API_EXPORT(ap_hash_t *) ap_hash_copy(ap_pool *pool,
                                         const ap_hash_t *h);
 
 /**
@@ -157,13 +160,13 @@ API_EXPORT(void *) ap_hash_get(ap_hash_t *ht, const void *key,
  * an iteration (although the results may be unpredictable unless all you do
  * is delete the current entry) and multiple iterations can be in
  * progress at the same time.
-
- * @example
  */
 /**
- * <PRE>
+ * @example
  *
- * int sum_values(ap_pool_t *p, ap_hash_t *ht)
+ * <PRE>
+ * 
+ * int sum_values(ap_pool *p, ap_hash_t *ht)
  * {
  *     ap_hash_index_t *hi;
  *     void *val;
@@ -176,12 +179,12 @@ API_EXPORT(void *) ap_hash_get(ap_hash_t *ht, const void *key,
  * }
  * </PRE>
  */
-API_EXPORT(ap_hash_index_t *) ap_hash_first(ap_pool_t *p, ap_hash_t *ht);
+API_EXPORT(ap_hash_index_t *) ap_hash_first(ap_pool *p, ap_hash_t *ht);
 
 /**
  * Continue iterating over the entries in a hash table.
  * @param hi The iteration state
- * @return a pointer to the updated iteration state.  NULL if there are no more
+ * @return a pointer to the updated iteration state.  NULL if there are no more  
  *         entries.
  */
 API_EXPORT(ap_hash_index_t *) ap_hash_next(ap_hash_index_t *hi);
@@ -195,7 +198,7 @@ API_EXPORT(ap_hash_index_t *) ap_hash_next(ap_hash_index_t *hi);
  * @remark The return pointers should point to a variable that will be set to the
  *         corresponding data, or they may be NULL if the data isn't interesting.
  */
-API_EXPORT(void) ap_hash_this(ap_hash_index_t *hi, const void **key,
+API_EXPORT(void) ap_hash_this(ap_hash_index_t *hi, const void **key, 
                                 ssize_t *klen, void **val);
 
 /**
@@ -206,6 +209,12 @@ API_EXPORT(void) ap_hash_this(ap_hash_index_t *hi, const void **key,
 API_EXPORT(unsigned int) ap_hash_count(ap_hash_t *ht);
 
 /**
+ * Clear any key/value pairs in the hash table.
+ * @param ht The hash table
+ */
+API_EXPORT(void) ap_hash_clear(ap_hash_t *ht);
+
+/**
  * Merge two hash tables into one new hash table. The values of the overlay
  * hash override the values of the base if both have the same key.  Both
  * hash tables must use the same hash function.
@@ -214,8 +223,8 @@ API_EXPORT(unsigned int) ap_hash_count(ap_hash_t *ht);
  * @param base The table that represents the initial values of the new table
  * @return A new hash table containing all of the data from the two passed in
  */
-API_EXPORT(ap_hash_t *) ap_hash_overlay(ap_pool_t *p,
-                                           const ap_hash_t *overlay,
+API_EXPORT(ap_hash_t *) ap_hash_overlay(ap_pool *p,
+                                           const ap_hash_t *overlay, 
                                            const ap_hash_t *base);
 
 /**
@@ -232,10 +241,10 @@ API_EXPORT(ap_hash_t *) ap_hash_overlay(ap_pool_t *p,
  * @param data Client data to pass to the merger function
  * @return A new hash table containing all of the data from the two passed in
  */
-API_EXPORT(ap_hash_t *) ap_hash_merge(ap_pool_t *p,
+API_EXPORT(ap_hash_t *) ap_hash_merge(ap_pool *p,
                                          const ap_hash_t *h1,
                                          const ap_hash_t *h2,
-                                         void * (*merger)(ap_pool_t *p,
+                                         void * (*merger)(ap_pool *p,
                                                      const void *key,
                                                      ssize_t klen,
                                                      const void *h1_val,
@@ -255,3 +264,5 @@ AP_POOL_DECLARE_ACCESSOR(hash);
 #endif
 
 #endif	/* !AP_HASH_H */
+
+
