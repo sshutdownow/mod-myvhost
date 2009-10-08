@@ -527,8 +527,7 @@ VHOST_FOUND:
  */
 static const char *set_host(cmd_parms *cmd, void *__unused__, char *arg)
 {
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
-					      &myvhost_module);
+    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
     const char *errmsg = ap_check_cmd_context(cmd, GLOBAL_ONLY);
 
     if (errmsg) {
@@ -538,14 +537,13 @@ static const char *set_host(cmd_parms *cmd, void *__unused__, char *arg)
     if (!arg || !strlen(arg)) {
 	return "mysql db host must be set";
     }	
-    cfg->mysql_host = ap_pstrdup(cmd->pool, arg);
+    cfg->mysql_host = arg;
     return NULL;
 }
 
 static const char *set_user(cmd_parms *cmd, void *__unused__, char *arg)
 {
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
-					      &myvhost_module);
+    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
     const char *errmsg = ap_check_cmd_context(cmd, GLOBAL_ONLY);
 
     if (errmsg) {
@@ -555,14 +553,13 @@ static const char *set_user(cmd_parms *cmd, void *__unused__, char *arg)
     if (!arg || !strlen(arg)) {
 	return "mysql db user must be set";
     }	
-    cfg->mysql_user = ap_pstrdup(cmd->pool, arg);
+    cfg->mysql_user = arg;
     return NULL;
 }
 
 static const char *set_pass(cmd_parms *cmd, void *__unused__, char *arg)
 {
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
-					      &myvhost_module);
+    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
     const char *errmsg = ap_check_cmd_context(cmd, GLOBAL_ONLY);
 
     if (errmsg) {
@@ -572,14 +569,13 @@ static const char *set_pass(cmd_parms *cmd, void *__unused__, char *arg)
     if (!arg || !strlen(arg)) {
 	return "mysql db passwd must be set";
     }	
-    cfg->mysql_pass = ap_pstrdup(cmd->pool, arg);
+    cfg->mysql_pass = arg;
     return NULL;
 }
 
 static const char *set_dbname(cmd_parms *cmd, void *__unused__, char *arg)
 {
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
-					      &myvhost_module);
+    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
     const char *errmsg = ap_check_cmd_context(cmd, GLOBAL_ONLY);
 
     if (errmsg) {
@@ -589,14 +585,13 @@ static const char *set_dbname(cmd_parms *cmd, void *__unused__, char *arg)
     if (!arg || !strlen(arg)) {
 	return "mysql db name must be set";
     }	
-    cfg->mysql_dbname = ap_pstrdup(cmd->pool, arg);
+    cfg->mysql_dbname = arg;
     return NULL;
 }
 
 static const char *set_socket(cmd_parms *cmd, void *__unused__, char *arg)
 {
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
-					      &myvhost_module);
+    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
     const char *errmsg = ap_check_cmd_context(cmd, GLOBAL_ONLY);
 
     if (errmsg) {
@@ -678,7 +673,7 @@ static const char *set_default_host(cmd_parms *cmd, void *__unused__, char *arg)
     if (!arg || !strlen(arg)) {
 	return "default_host must be set";
     }
-    cfg->default_host = ap_pstrdup(cmd->pool, arg);
+    cfg->default_host = arg;
     return NULL;
 }
 
