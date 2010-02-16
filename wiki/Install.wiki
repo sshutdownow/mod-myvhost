@@ -6,7 +6,7 @@
 ==Prerequisities:==
 This packages usually are required for successful compilation:
 {{{
-apache13-dev
+httpd-dev
 mysql-dev
 }}}
 ===Download source code:===
