@@ -4,8 +4,9 @@
 * Tue Feb 16 2010 Igor Popov <ipopovi@gmail.com>
 - beta version of the mod_myvhost for Apache 2.xx branch
 - RPM spec for Apache 2.0.xx branch
-- workaround for apr_hash_clear
-
+- workaround for missing apr_hash_clear
+}}}
+{{{
 * Tue Dec 05 2006 Igor Popov <ipopovi@gmail.com>
 - Just changed from using Apache's ap_psprintf to libc's snprintf,
   it allows to use more complicated directives like %1$s and
@@ -13,16 +14,19 @@
   by name or alias, for example:
   SELECT `rootdir` FROM `db` WHERE (`vname`='%1$s' OR `valias`='%1$s');
 - Also added expiremental feature - set uid and gid for suexec.
-
+}}}
+{{{
 * Sat Jun 03 2006 Igor Popov <ipopovi@gmail.com>
  - Added internal implementation of mysql_escape_string().
  - Some minor fixes.
-
+}}}
+{{{
 * Sat Mar 25 2006 Igor Popov <ipopovi@gmail.com>
  - Added experimental support for internal caching for MySQL responses,
    caching is based on apr_hash from apr 1.2.2
-
+}}}
+{{{
 * Sun Mar 19 2006 Igor Popov <ipopovi@gmail.com>
 - The first public release
 }}}
-            
+      
