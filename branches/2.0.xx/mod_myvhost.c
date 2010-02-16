@@ -179,8 +179,9 @@ static int myvhost_translate(request_rec *r)
         ap_get_module_config(r->server->module_config, &myvhost_module);
     core_server_config *scfg =
         ap_get_module_config(r->server->module_config, &core_module);
-    char *query = 0;
-    char *safe_hostname = 0;
+    char query[4096];
+    /* RFC 2181, SQL escaped every char and null-terminating char*/
+    char safe_hostname[1004*2 +1];
     int hostname_len = 0;
     MYSQL_RES *res_set = 0;
     MYSQL_ROW row;
@@ -216,7 +217,7 @@ static int myvhost_translate(request_rec *r)
         return DECLINED;
     }
 
-    if (!r->hostname) {
+    if (!r->hostname || !(hostname_len = strlen(r->hostname))) {
 #ifdef DEBUG
         ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
                       "declined: no hostname found in request");
@@ -224,6 +225,12 @@ static int myvhost_translate(request_rec *r)
         return DECLINED;
     }
 
+    if (hostname_len > 1004) {
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
+                        "declined: hostname '%s' too long", r->hostname);
+        return DECLINED;
+    }
+                                    
     if (ap_ind(r->hostname, '\'') != -1 || ap_ind(r->hostname, '\\') != -1) {
         ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
                       "declined: invalid character(s) in hostname '%s'", r->hostname);
@@ -278,8 +285,6 @@ static int myvhost_translate(request_rec *r)
         return DECLINED;
     }
 
-    hostname_len = strlen(r->hostname);
-    safe_hostname = apr_pcalloc(r->pool, hostname_len * 2 + 1);
 #if 1
     escape_sql(r->hostname, hostname_len, safe_hostname, hostname_len * 2 + 1);
 #else
@@ -289,7 +294,9 @@ static int myvhost_translate(request_rec *r)
     mysql_escape_string(safe_hostname, r->hostname, hostname_len);
 #endif
 #endif
-    query = apr_psprintf(r->pool, cfg->mysql_vhost_query, safe_hostname, NULL);
+
+    /* The output is always null-terminated. */
+    snprintf(query, sizeof(query), cfg->mysql_vhost_query, safe_hostname);
 
     ap_block_alarms();		/* to prevent memleaks from mysql library */
 
