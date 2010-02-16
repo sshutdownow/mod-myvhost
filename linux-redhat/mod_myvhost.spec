@@ -1,7 +1,7 @@
 Summary: Apache module for dynamically configured name-based mass virtual hosting with PHP.
 Name: mod_myvhost
 Version: 0.15
-Release: 1
+Release: 3
 License: Apache-2.0
 URL: http://code.google.com/p/mod-myvhost/
 Group: System Environment/Daemons
@@ -34,17 +34,23 @@ make %{_smp_mflags}
 
 %install
 rm -rf %{buildroot}
+sed -i -e 's|/usr/local/www|/var/www|g' \
+       -e 's|www.my.net|default|g' \
+       -e 's|/tmp/mysql.sock|/var/lib/mysql/mysql.sock|g' \
+	httpd.conf.add vhosts.sql
+install -D -m644 httpd.conf.add   %{buildroot}/%{_sysconfdir}/httpd/conf.d/zz%{name}.conf
 install -D -m755 .libs/%{name}.so %{buildroot}/%{_libdir}/httpd/modules/%{name}.so
-install -D -m644 httpd.conf.add   %{buildroot}/%{_sysconfdir}/httpd/conf.d/%{name}.conf
+
 
 %clean
 rm -rf %{buildroot}
 
 %files
 %defattr (-,root,root)
-%doc LICENSE doc/changelog.html doc/documentation.html doc/download.html doc/index.html
+%doc LICENSE vhosts.sql
+%doc doc/changelog.html doc/documentation.html doc/download.html doc/index.html
 %attr(0755,root,root) %{_libdir}/httpd/modules/%{name}.so
-%attr(0644,root,root) %config(noreplace) %{_sysconfdir}/httpd/conf.d/%{name}.conf
+%attr(0644,root,root) %config(noreplace) %{_sysconfdir}/httpd/conf.d/zz%{name}.conf
 
 %changelog
 * Tue Feb 16 2010 Igor Popov <ipopovi@gmail.com>

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005-2006 Igor Popov <igorpopov@newmail.ru>
+ * Copyright (c) 2005-2010 Igor Popov <ipopovi@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy
