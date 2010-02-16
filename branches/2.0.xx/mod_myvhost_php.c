@@ -24,12 +24,12 @@ static const char __unused cvsid[] = "$Id$";
 #pragma weak zend_alter_ini_entry = _zend_alter_ini_entry
 #pragma weak zend_restore_ini_entry = _zend_restore_ini_entry
 
-int _zend_alter_ini_entry(const char *p1 __unused, size_t p2 __unused, const char *p3 __unused, size_t p4 __unused, int p5 __unused, int p6 __unused)
+int _zend_alter_ini_entry(char *p1 __unused, unsigned int p2 __unused, char* p3 __unused, unsigned int p4 __unused, int p5 __unused, int p6 __unused)
 {
     return -1;
 }
 
-int _zend_restore_ini_entry(const char *p1 __unused, size_t p2 __unused, int p3 __unused)
+int _zend_restore_ini_entry(char *p1 __unused, unsigned int p2 __unused, int p3 __unused)
 {
     return -1;
 }

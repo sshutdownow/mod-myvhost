@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005-2007 Igor Popov <igorpopov@newmail.ru>
+ * Copyright (c) 2005-2010 Igor Popov <ipopovi@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy
@@ -226,7 +226,7 @@ static int myvhost_translate(request_rec *r)
     }
 
     if (hostname_len > 1004) {
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
                         "declined: hostname '%s' too long", r->hostname);
         return DECLINED;
     }
