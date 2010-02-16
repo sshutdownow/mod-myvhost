@@ -1,13 +1,13 @@
 ==Changelog:==
 
 {{{
-* Tue Feb 16 2010 Igor Popov <ipopovi@gmail.com>
+* Tue Feb 16 2010 Igor Popov <ipopovi@gmail.com> - v0.15-2
 - beta version of the mod_myvhost for Apache 2.xx branch
 - RPM spec for Apache 2.0.xx branch
 - workaround for missing apr_hash_clear
 }}}
 {{{
-* Tue Dec 05 2006 Igor Popov <ipopovi@gmail.com>
+* Tue Dec 05 2006 Igor Popov <ipopovi@gmail.com> - v0.15
 - Just changed from using Apache's ap_psprintf to libc's snprintf,
   it allows to use more complicated directives like %1$s and
   in turn it allows very simple solvation of problem finding vhost
