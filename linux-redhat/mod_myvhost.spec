@@ -49,7 +49,8 @@ rm -rf %{buildroot}
 %changelog
 * Tue Feb 16 2010 Igor Popov <ipopovi@gmail.com>
 - beta version of the mod_myvhost for Apache 2.xx branch
-- SRPM for Apache 2.xx branch
+- RPM spec for Apache 2.0.xx branch
+- workaround for apr_hash_clear
 
 * Tue Dec 05 2006 Igor Popov <ipopovi@gmail.com>
 - Just changed from using Apache's ap_psprintf to libc's snprintf,
