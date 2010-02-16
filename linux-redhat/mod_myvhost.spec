@@ -2,7 +2,7 @@ Summary: Apache module for dynamically configured name-based mass virtual hostin
 Name: mod_myvhost
 Version: 0.15
 Release: 1
-License: Apache
+License: Apache-2.0
 URL: http://code.google.com/p/mod-myvhost/
 Group: System Environment/Daemons
 Source: http://mod-myvhost.googlecode.com/files/%{name}-%{version}.tar.gz
