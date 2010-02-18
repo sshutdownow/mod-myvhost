@@ -114,7 +114,7 @@ struct apr_hash_index_t {
 #endif
 
 /* FIXME: delete entries that is really older */
-void cache_vhost_flush(myvhost_cfg_t *cfg, apr_hash_t *cache, time_t older)
+void cache_vhost_flush(myvhost_cfg_t *cfg, apr_hash_t *cache, time_t older __unused)
 {
 #if !defined(APR_VERSION_AT_LEAST) 
     apr_hash_index_t *hi;
