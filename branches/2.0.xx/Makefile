@@ -13,7 +13,7 @@ OBJS = mod_myvhost.o mod_myvhost_cache.o escape_sql.o
 #SRCS = mod_myvhost.c mod_myvhost_cache.c mod_myvhost_php.c escape_sql.c
 #OBJS = mod_myvhost.o mod_myvhost_cache.o mod_myvhost_php.o escape_sql.o
 
-RM = rm -f
+RM = rm -rf
 LN = ln -sf
 CP = cp -f
 
@@ -37,4 +37,4 @@ install: all
 	$(APXS) -i -a -n $(NAME) $(MODULE_LA)
 
 clean:
-	$(RM) $(OBJS) $(APACHE_MODULE) *.slo *.lo mod_myvhost.la
+	$(RM) $(OBJS) $(APACHE_MODULE) *.slo *.lo mod_myvhost.la .libs

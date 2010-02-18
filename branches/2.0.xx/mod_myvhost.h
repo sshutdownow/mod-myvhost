@@ -34,14 +34,12 @@ typedef struct {
     char *mysql_unixsock;
     unsigned short int mysql_inetsock;
 
-    char *default_root;
-    char *default_host;
-
 #ifdef WITH_CACHE
     int cache_enabled;
     apr_hash_t *cache;
     apr_pool_t *pool;
 #endif /* WITH_CACHE */
+
 } myvhost_cfg_t;
 
 #endif /* __MOD_MYVHOST_H__ */

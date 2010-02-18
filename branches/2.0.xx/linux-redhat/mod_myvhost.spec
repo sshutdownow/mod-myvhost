@@ -1,7 +1,7 @@
 Summary: Apache module for dynamically configured name-based mass virtual hosting with PHP.
 Name: mod_myvhost
 Version: 0.15
-Release: 3
+Release: 4
 License: Apache-2.0
 URL: http://code.google.com/p/mod-myvhost/
 Group: System Environment/Daemons
@@ -34,9 +34,7 @@ make %{_smp_mflags}
 
 %install
 rm -rf %{buildroot}
-sed -i -e 's|/usr/local/www|/var/www|g' \
-       -e 's|www.my.net|default|g' \
-       -e 's|/tmp/mysql.sock|/var/lib/mysql/mysql.sock|g' \
+sed -i -e 's|/tmp/mysql.sock|/var/lib/mysql/mysql.sock|g' \
 	httpd.conf.add vhosts.sql
 install -D -m644 httpd.conf.add   %{buildroot}/%{_sysconfdir}/httpd/conf.d/zz%{name}.conf
 install -D -m755 .libs/%{name}.so %{buildroot}/%{_libdir}/httpd/modules/%{name}.so
