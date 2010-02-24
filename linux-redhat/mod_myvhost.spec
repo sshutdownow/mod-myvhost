@@ -1,7 +1,7 @@
 Summary: Apache module for dynamically configured name-based mass virtual hosting with PHP.
 Name: mod_myvhost
-Version: 0.15
-Release: 4
+Version: 0.16
+Release: 1
 License: Apache-2.0
 URL: http://code.google.com/p/mod-myvhost/
 Group: System Environment/Daemons
@@ -51,6 +51,9 @@ rm -rf %{buildroot}
 %attr(0644,root,root) %config(noreplace) %{_sysconfdir}/httpd/conf.d/zz%{name}.conf
 
 %changelog
+* Thu Feb 18 2010 Igor Popov <ipopovi@gmail.com>
+- vhosts that are defined in apache config and created on fly works together
+
 * Tue Feb 16 2010 Igor Popov <ipopovi@gmail.com>
 - beta version of the mod_myvhost for Apache 2.xx branch
 - RPM spec for Apache 2.0.xx branch
