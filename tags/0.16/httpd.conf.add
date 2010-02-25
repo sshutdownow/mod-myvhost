@@ -1,0 +1,28 @@
+#
+# Copyright (c) 2005-2010 Igor Popov <ipopovi@gmail.com>
+#
+# to work properly mod_myvhost.c should be loaded after php module
+#
+# $Id$
+#
+
+<IfModule mod_myvhost.c>
+	MyVhostOn		on
+	MyVhostDbHost		"localhost"
+	MyVhostDbSocket		"/tmp/mysql.sock"
+	MyVhostDbUser		"nonpriv"
+	MyVhostDbPass		"M3Ga PaSsVVd"
+	MyVhostDbName		"hosting"
+	MyVhostQuery		"SELECT rootdir,admin,extra_php_config FROM vhosts WHERE (vhost LIKE '%1$s' OR CONCAT_WS('.', 'www', vhost) LIKE '%1$s') AND enabled='yes' LIMIT 1"
+	
+	<Directory "/usr/local/www/vhosts">
+#	    RewriteEngine on
+#	    Options Indexes SymLinksIfOwnerMatch
+#	    AllowOverride FileInfo
+	    Options Indexes
+	    AllowOverride None
+	    Order allow,deny
+	    Allow from all
+	</Directory>
+	
+</IfModule>
