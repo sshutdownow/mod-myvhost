@@ -38,9 +38,8 @@
 #include "apr_strings.h"
 #include "apr_hash.h"
 #include "apr_time.h"
-#include "apr_dbd.h"
-#include "mod_dbd.h"
 
+#include <mysql.h>
 
 #if !defined(__unused)
 
@@ -51,6 +50,5 @@
 #endif
 
 #endif /* __unused */
-
 
 #endif /* __MYVHOST_INCLUDE_H__ */
