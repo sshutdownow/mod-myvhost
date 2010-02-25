@@ -31,8 +31,8 @@
 #define PHP_INI_STAGE_RUNTIME           (1<<4)
 
 __BEGIN_DECLS
-int zend_alter_ini_entry(const char *, size_t, const char *, size_t, int, int);
-int zend_restore_ini_entry(const char *, size_t, int);
+int zend_alter_ini_entry(char*, unsigned int, char*, unsigned int, int, int);
+int zend_restore_ini_entry(char *, unsigned int, int);
 __END_DECLS
 
 #endif /* __MOD_MYVHOST_PHP_H__ */
