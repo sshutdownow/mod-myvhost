@@ -48,9 +48,6 @@ typedef struct {
     char *mysql_unixsock;
     unsigned short int mysql_inetsock;
 
-    char *default_root;
-    char *default_host;
-
 #ifdef WITH_CACHE
     int cache_enabled;
     ap_hash_t *cache;

@@ -80,8 +80,6 @@ static void *myvhost_merge_server_config(pool *p, void *base, void *override)
     new_conf->mysql_unixsock = base_conf->mysql_unixsock;
     new_conf->mysql_vhost_query = (override_conf->mysql_vhost_query == NULL) ?
 	base_conf->mysql_vhost_query : override_conf->mysql_vhost_query;
-    new_conf->default_host = base_conf->default_host;
-    new_conf->default_root = base_conf->default_root;
 #ifdef WITH_CACHE
     new_conf->cache_enabled = (override_conf->cache_enabled == 1) ? 1 : 0;
     new_conf->pool = ap_make_sub_pool(p);
@@ -132,34 +130,23 @@ static void cleanup_mysql_result(void *result)
     }
 }
 
-static void reg_cleanup_mysql_result(pool *p, MYSQL_RES * result)
-{
-    ap_register_cleanup(p, (void *)result, cleanup_mysql_result, &ap_null_cleanup);
-}
 
-static void run_cleanup_mysql_result(pool *p, MYSQL_RES * result)
+/* 
+ * docroot restore code stolen from mod_perl :)
+ */
+  
+typedef struct  {
+    const char **docroot;
+    const char *original;
+} docroot_t, *p_docroot_t;
+                  
+/* docroot cleanup handler */
+static void restore_docroot(void *data)
 {
-    ap_run_cleanup(p, (void *)result, &cleanup_mysql_result);
-}
-
-static void default_host(myvhost_cfg_t *cfg, core_server_config *scfg, request_rec *r)
-{
-    /* set default values */
-    scfg->ap_document_root = ap_pstrdup(r->pool, cfg->default_root);
-    r->server->server_hostname = ap_pstrdup(r->pool, cfg->default_host);
-    r->server->server_uid = ap_user_id;
-    r->server->server_gid = ap_group_id;
-    r->server->server_admin = ap_pstrcat(r->pool, "webmaster@", cfg->default_host, NULL);
-    r->server->is_virtual = 0;
-
-#ifdef WITH_PHP
-    if (zend_restore_ini_entry("open_basedir", sizeof("open_basedir"), PHP_INI_STAGE_RUNTIME) < 0) {
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r, "zend_restore_ini_entry() failed");
+    if (data) {
+	p_docroot_t di = (p_docroot_t)data;
+	*di->docroot  = di->original;
     }
-    if (zend_restore_ini_entry("open_basedir", sizeof("safe_mode"), PHP_INI_STAGE_RUNTIME) < 0) {
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r, "zend_restore_ini_entry() failed");
-    }
-#endif
 }
 
 /*
@@ -169,15 +156,16 @@ static int myvhost_translate(request_rec *r)
 {
     myvhost_cfg_t *cfg = ap_get_module_config(r->server->module_config, &myvhost_module);
     core_server_config *scfg = ap_get_module_config(r->server->module_config, &core_module);
-    char query[4096];
+    const char *hostname;
+    int hostname_len = 0;
     /* RFC 2181, SQL escaped every char and null-terminating char*/
     char safe_hostname[1004*2 +1];
-    int hostname_len = 0;
+    char query[4096];
     MYSQL_RES *res_set = 0;
     MYSQL_ROW row;
     int num_fields_fetched = 0;
-    char *rootdir = 0;
-    char *admin = 0;
+    p_docroot_t di = 0;
+    char *rootdir, *admin = 0;
 
 #ifdef WITH_PHP
     char *php_ini_conf = 0;
@@ -206,7 +194,9 @@ static int myvhost_translate(request_rec *r)
 	return DECLINED;
     }
 
-    if (!r->hostname || !(hostname_len = strlen(r->hostname))) {
+    hostname = ap_get_server_name(r);
+    
+    if (!hostname || !(hostname_len = strlen(r->hostname))) {
 #ifdef DEBUG
 	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
 		      "declined: no hostname found in request");
@@ -216,13 +206,13 @@ static int myvhost_translate(request_rec *r)
 
     if (hostname_len > 1004) {
 	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
-	    "declined: hostname '%s' too long", r->hostname);
+	    "declined: hostname '%s' too long", hostname);
 	return DECLINED;
     }
 
-    if (ap_ind(r->hostname, '\'') != -1 || ap_ind(r->hostname, '\\') != -1) {
+    if (ap_ind(hostname, '\'') != -1 || ap_ind(hostname, '\\') != -1) {
 	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
-	    "declined: invalid character(s) in hostname '%s'", r->hostname);
+	    "declined: invalid character(s) in hostname '%s'", hostname);
 	return DECLINED;
     }
 
@@ -241,7 +231,7 @@ static int myvhost_translate(request_rec *r)
     }
 
 #ifdef WITH_CACHE
-    if ((vhost = cache_vhost_find(cfg, r->hostname)) != 0) {
+    if ((vhost = cache_vhost_find(cfg, hostname)) != 0) {
 	if (vhost->hits > 0) {
 	    rootdir = vhost->root;
 	    admin = vhost->admin;
@@ -254,14 +244,14 @@ static int myvhost_translate(request_rec *r)
 #endif
 #ifdef DEBUG
 	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
-		  "cache: vhost '%s' found in positive cache", r->hostname);
+		  "cache: vhost '%s' found in positive cache", hostname);
 #endif
 	    goto VHOST_FOUND;	/* I don't like goto, but sometimes it can be
 				 * usefull. */
 	} else if (vhost->hits < 0) {
 #ifdef DEBUG
 	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
-	       "declined: vhost '%s' found in negative cache", r->hostname);
+	       "declined: vhost '%s' found in negative cache", hostname);
 #endif
 	    default_host(cfg, scfg, r);
 	    return DECLINED;
@@ -274,12 +264,12 @@ static int myvhost_translate(request_rec *r)
 	return DECLINED;
     }
 #if 1
-    escape_sql(r->hostname, hostname_len, safe_hostname, sizeof(safe_hostname));
+    escape_sql(hostname, hostname_len, safe_hostname, sizeof(safe_hostname));
 #else
 #ifdef HAVE_MYSQL_REAL_ESCAPE_STRING
-    mysql_real_escape_string(cfg->mysql, safe_hostname, r->hostname, hostname_len);
+    mysql_real_escape_string(cfg->mysql, safe_hostname, hostname, hostname_len);
 #else
-    mysql_escape_string(safe_hostname, r->hostname, hostname_len);
+    mysql_escape_string(safe_hostname, hostname, hostname_len);
 #endif
 #endif
 
@@ -300,7 +290,7 @@ static int myvhost_translate(request_rec *r)
     }
     /* we have data */
     res_set = mysql_store_result(cfg->mysql);
-    reg_cleanup_mysql_result(r->pool, res_set);
+    ap_register_cleanup(r->pool, (void *)res_set, cleanup_mysql_result, &ap_null_cleanup);
 
     ap_unblock_alarms();
 
@@ -308,7 +298,7 @@ static int myvhost_translate(request_rec *r)
     if (!row) {
 	ap_block_alarms();
 	{
-	    run_cleanup_mysql_result(r->pool, res_set);
+	    ap_run_cleanup(r->pool, (void *)res_set, &cleanup_mysql_result);
 #ifdef WITH_CACHE
 	    cache_vhost_add(cfg, r->hostname, 0, 0,
 #ifdef WITH_PHP
@@ -396,7 +386,7 @@ static int myvhost_translate(request_rec *r)
 
 	ap_block_alarms(); /* to avoid memleaks */
 	{
-	    run_cleanup_mysql_result(r->pool, res_set);
+	    ap_run_cleanup(r->pool, (void *)res_set, &cleanup_mysql_result);
 	}
 	ap_unblock_alarms();
 
@@ -414,11 +404,19 @@ VHOST_FOUND:
 	    return DECLINED;
 	}
 
-	scfg->ap_document_root = rootdir;
+/*
 	r->server->server_hostname = ap_pstrdup(r->pool, r->hostname);
 	r->parsed_uri.hostname = r->server->server_hostname;
 	r->parsed_uri.hostinfo = r->server->server_hostname;
 	r->parsed_uri.path = ap_pstrcat(r->pool, rootdir, r->parsed_uri.path, NULL);
+*/
+	di = ap_palloc(r->pool, sizeof *di);
+        di->docroot = &scfg->ap_document_root;
+        di->original = scfg->ap_document_root;
+        ap_pool_cleanup_register(r->pool, di, restore_docroot, restore_docroot);
+
+	scfg->ap_document_root = rootdir;
+
 	r->server->is_virtual = 1;
 #ifdef WITH_UID_GID	
 	r->server->server_gid = uid;
@@ -639,44 +637,6 @@ static const char *set_module_onoff(cmd_parms *cmd, void *__unused__, int flag)
     return NULL;
 }
 
-static const char *set_default_root(cmd_parms *cmd, void *__unused__, char *arg)
-{
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
-    const char *errmsg = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-
-    if (errmsg) {
-	return errmsg;
-    }
-
-    if (!arg || !strlen(arg)) {
-	return "default_root must be set";
-    }
-
-    arg = ap_os_canonical_filename(cmd->pool, arg);
-
-    if (!ap_is_directory(arg)) {
-	return "default_root must be a directory";
-    }
-    cfg->default_root = arg;
-    return NULL;
-}
-
-static const char *set_default_host(cmd_parms *cmd, void *__unused__, char *arg)
-{
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
-    const char *errmsg = ap_check_cmd_context(cmd, GLOBAL_ONLY);
-
-    if (errmsg) {
-	return errmsg;
-    }
-
-    if (!arg || !strlen(arg)) {
-	return "default_host must be set";
-    }
-    cfg->default_host = arg;
-    return NULL;
-}
-
 #ifdef WITH_CACHE
 static const char *set_cache_onoff(cmd_parms *cmd, void *__unused__, int flag)
 {
@@ -694,8 +654,6 @@ static const char *set_cache_onoff(cmd_parms *cmd, void *__unused__, int flag)
 
 static const command_rec myvhost_cmds[] = {
     {"MyVhostOn", set_module_onoff, NULL, RSRC_CONF, FLAG, "Turn on Apache MySQL Vuser on this server"},
-    {"MyVhostDefaultHost", set_default_host, NULL, RSRC_CONF, TAKE1, "Set default hostname"},
-    {"MyVhostDefaultRoot", set_default_root, NULL, RSRC_CONF, TAKE1, "Set default root directory"},
     {"MyVhostDbHost", set_host, NULL, RSRC_CONF, TAKE1, "Set hostname for MySQL server"},
     {"MyVhostDbName", set_dbname, NULL, RSRC_CONF, TAKE1, "Set database to connect"},
     {"MyVhostDbUser", set_user, NULL, RSRC_CONF, TAKE1, "Set username for database"},
