@@ -1,3 +1,6 @@
+#
+# $Id$
+#
 Summary: Apache module for dynamically configured name-based mass virtual hosting with PHP.
 Name: mod_myvhost
 Version: 0.16
