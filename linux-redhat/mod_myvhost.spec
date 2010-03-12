@@ -4,15 +4,15 @@
 Summary: Apache module for dynamically configured name-based mass virtual hosting with PHP.
 Name: mod_myvhost
 Version: 0.16
-Release: 2
+Release: 3
 License: Apache-2.0
 URL: http://code.google.com/p/mod-myvhost/
 Group: System Environment/Daemons
 Source: http://mod-myvhost.googlecode.com/files/%{name}-%{version}.tar.gz
 #Source1: 
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-Requires: httpd httpd-mmn = %([ -a %{_includedir}/httpd/.mmn ] && cat %{_includedir}/httpd/.mmn || echo missing)
-BuildRequires: httpd-devel
+Requires: mysql httpd httpd-mmn = %([ -a %{_includedir}/httpd/.mmn ] && cat %{_includedir}/httpd/.mmn || echo missing)
+BuildRequires: httpd-devel mysql-devel
 
 %description
 mod_myvhost is Apache module for dynamically configured name based mass virtual
