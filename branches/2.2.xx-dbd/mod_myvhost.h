@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005-2006 Igor Popov <igorpopov@newmail.ru>
+ * Copyright (c) 2005-2010 Igor Popov <ipopovi@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy
@@ -20,26 +20,36 @@
 #ifndef __MOD_MYVHOST_H__
 #define __MOD_MYVHOST_H__
 
+/* Maximum number of parameters which can be passed to the query */
+#define MAX_PARAMS  100
+
+/* vhost_dbd_module server configuration */
 typedef struct {
-
     int myvhost_enabled;
-    int mysql_connected;
-
-    MYSQL *mysql;
-    char *mysql_host;
-    char *mysql_user;
-    char *mysql_pass;
-    char *mysql_dbname;
-    char *mysql_vhost_query;
-    char *mysql_unixsock;
-    unsigned short int mysql_inetsock;
-
+    const char *label;          /* DBD prepared statement label */
+    const char *sql;            /* SQL statement (or label from  DBDPrepareSQL) */
+    int nparams;                /* number of params */
+    int params[MAX_PARAMS];     /* array of param codes */
+    int urisegs[MAX_PARAMS];    /* number of URI segments to use (0=all) */
 #ifdef WITH_CACHE
     int cache_enabled;
     apr_hash_t *cache;
     apr_pool_t *pool;
 #endif /* WITH_CACHE */
-
 } myvhost_cfg_t;
+
+/* vhost_dbd_module connection configuration */
+typedef struct {
+    const char *hostname;
+    const char *ftp_user;
+    const char *uri;
+    const char *root;
+    apr_hash_t *envs;
+} myvhost_con_cfg_t;
+
+/* parameter codes */
+typedef enum {
+    HOSTNAME, IP, PORT, URI, FTPUSER
+} param_names_t;
 
 #endif /* __MOD_MYVHOST_H__ */
