@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005-2006 Igor Popov <igorpopov@newmail.ru>
+ * Copyright (c) 2005-2010 Igor Popov <ipopovi@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy
@@ -23,23 +23,17 @@
 #include <sys/types.h>
 #include <sys/cdefs.h>
 
-#include "ap_config.h"
+#include "apr_strings.h"
+#include "apr_lib.h"
+#include "apu.h"
+#include "apr_dbd.h"
+#include "apu_version.h"
 #include "httpd.h"
 #include "http_request.h"
-#include "http_config.h"
-#include "http_core.h"
 #include "http_log.h"
-#include "http_main.h"
-#include "http_protocol.h"
-#include "util_script.h"
+#include "http_config.h"
+#include "mod_dbd.h"
 
-#include "apr.h"
-#include "apr_pools.h"
-#include "apr_strings.h"
-#include "apr_hash.h"
-#include "apr_time.h"
-
-#include <mysql.h>
 
 #if !defined(__unused)
 

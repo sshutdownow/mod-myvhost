@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2005-2007 Igor Popov <igorpopov@newmail.ru>
+# Copyright (c) 2005-2010 Igor Popov <ipopovi@gmail.com>
 #
 # $Id$
 #
@@ -8,10 +8,10 @@ NAME = myvhost
 APACHE_MODULE = mod_myvhost.so
 MODULE_LA = mod_myvhost.la
 APXS = apxs
-SRCS = mod_myvhost.c mod_myvhost_cache.c escape_sql.c
-OBJS = mod_myvhost.o mod_myvhost_cache.o escape_sql.o
-#SRCS = mod_myvhost.c mod_myvhost_cache.c mod_myvhost_php.c escape_sql.c
-#OBJS = mod_myvhost.o mod_myvhost_cache.o mod_myvhost_php.o escape_sql.o
+SRCS = mod_myvhost.c mod_myvhost_cache.c
+OBJS = mod_myvhost.o mod_myvhost_cache.o
+#SRCS = mod_myvhost.c mod_myvhost_cache.c mod_myvhost_php.c
+#OBJS = mod_myvhost.o mod_myvhost_cache.o mod_myvhost_php.o
 
 RM = rm -rf
 LN = ln -sf

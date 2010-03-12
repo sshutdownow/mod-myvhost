@@ -15,7 +15,7 @@
 	MyVhostDbName		"hosting"
 	MyVhostQuery		"SELECT rootdir,admin,extra_php_config FROM vhosts WHERE (vhost LIKE '%1$s' OR CONCAT_WS('.', 'www', vhost) LIKE '%1$s') AND enabled='yes' LIMIT 1"
 	
-	<Directory "/usr/local/www/vhosts">
+	<Directory "/var/www/vhosts">
 #	    RewriteEngine on
 #	    Options Indexes SymLinksIfOwnerMatch
 #	    AllowOverride FileInfo
