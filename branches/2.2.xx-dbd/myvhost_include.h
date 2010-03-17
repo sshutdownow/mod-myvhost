@@ -28,10 +28,12 @@
 #include "apu.h"
 #include "apr_dbd.h"
 #include "apu_version.h"
+#include "ap_config.h"
 #include "httpd.h"
 #include "http_request.h"
-#include "http_log.h"
 #include "http_config.h"
+#include "http_core.h"
+#include "http_log.h"
 #include "mod_dbd.h"
 
 

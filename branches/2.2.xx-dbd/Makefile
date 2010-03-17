@@ -10,8 +10,6 @@ MODULE_LA = mod_myvhost.la
 APXS = apxs
 SRCS = mod_myvhost.c mod_myvhost_cache.c
 OBJS = mod_myvhost.o mod_myvhost_cache.o
-#SRCS = mod_myvhost.c mod_myvhost_cache.c mod_myvhost_php.c
-#OBJS = mod_myvhost.o mod_myvhost_cache.o mod_myvhost_php.o
 
 RM = rm -rf
 LN = ln -sf
