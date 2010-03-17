@@ -22,6 +22,7 @@
  *
  */
 
+#define CORE_PRIVATE
 
 #include "myvhost_include.h"
 #include "mod_myvhost.h"
@@ -114,14 +115,9 @@ static int myvhost_translate_name(request_rec *r)
 
     hostname = ap_get_server_name(r);
     if (!hostname || !strlen(hostname)) {
-#ifdef DEBUG
         ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
-                      "declined: no hostname found in request");
-#endif
-        return DECLINED;
-    }
-
-    if (ap_ind(hostname, '\'') != -1 || ap_ind(hostname, '\\') != -1) {
+                      "no hostname found in request");
+    } else if (ap_ind(hostname, '\'') != -1 || ap_ind(hostname, '\\') != -1) {
         ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
                       "http_bad_request: invalid character(s) in hostname '%s'", hostname);
         return HTTP_BAD_REQUEST;
@@ -135,29 +131,35 @@ static int myvhost_translate_name(request_rec *r)
     params = (const char **) apr_pcalloc(r->pool, conf->nparams * sizeof(char *));
 
     /* Use the top-level request for FTPuser, IP, and Port */
-    while (mainreq->main)
+    while (mainreq->main) {
         mainreq = mainreq->main;
-
+    }
+    
     /* Collect the parameters.  Make sure hostname and uri cannot surprise the
      * database server with unexpected characaters (e.g. control characters)
      * We (ab)use the ap_escape_logitem function to prevent this kind of trouble.
      */
     for (i = 0; i < conf->nparams; i++) {
         switch (conf->params[i]) {
+
         case HOSTNAME:
             keyHostname = ap_escape_logitem(r->pool, hostname);
             params[i] = keyHostname;
             break;
+
         case IP:
             params[i] = mainreq->connection->local_ip;
             break;
+
         case PORT:
             params[i] = apr_itoa(r->pool, mainreq->connection->local_addr->port);
             break;
+
         case FTPUSER:
             keyFTPuser = ap_escape_logitem(r->pool, mainreq->user);
             params[i] = keyFTPuser;
             break;
+
         case URI:
             start = ap_escape_uri(r->pool, r->uri);
             if ( (j = conf->urisegs[i]) && start) {
@@ -215,11 +217,13 @@ static int myvhost_translate_name(request_rec *r)
 
         /* conf->sql might just be a label created with DBDPrepareSQL, not SQL */
         if (isSimpleName(conf->sql)
-                && (prestmt = apr_hash_get(dbd->prepared, conf->sql, APR_HASH_KEY_STRING)))
+                && (prestmt = apr_hash_get(dbd->prepared, conf->sql, APR_HASH_KEY_STRING))) {
             stmt = prestmt;
-
-        if (rv = apr_dbd_pselect(dbd->driver, r->pool, dbd->handle, &res, stmt,
-                                 0, conf->nparams, params)) {
+	}
+	
+	rv = apr_dbd_pselect(dbd->driver, r->pool, dbd->handle, &res, stmt,
+                                 0, conf->nparams, params);
+        if (rv) {
             ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r,
                           "mod_vhost_dbd: Unable to execute SQL statement: %s",
                           apr_dbd_error(dbd->driver, dbd->handle, rv));
@@ -347,7 +351,9 @@ static int myvhost_translate_name(request_rec *r)
         return HTTP_FORBIDDEN;
     } else {
         /* got a good doc root - set it and save the result for this conn */
+#if APU_MAJOR_VERSION > 1 || (APU_MAJOR_VERSION == 1 && APU_MINOR_VERSION >= 3)
         apr_hash_index_t *hidx;
+#endif
 
         r->canonical_filename = r->filename;
         conn_conf->root = apr_pstrdup(r->connection->pool, newroot);
@@ -370,7 +376,7 @@ static int myvhost_translate_name(request_rec *r)
 }
 
 /* process DBDocRoot directive */
-static const char *setVhostQuery(cmd_parms *cmd, void *mconfig,
+static const char *setVhostQuery(cmd_parms *cmd, void* mconfig __unused,
                                  const char *sql, const char *paramName)
 {
     static long label_num = 0;
@@ -424,7 +430,7 @@ static const char *setVhostQuery(cmd_parms *cmd, void *mconfig,
     return NULL;
 }
 
-static void *merge_config_server(apr_pool_t *p, void *parentconf,
+static void *merge_config_server(apr_pool_t *p __unused, void *parentconf,
                                  void *newconf)
 {
     myvhost_cfg_t *base = (myvhost_cfg_t *) parentconf;
@@ -433,7 +439,7 @@ static void *merge_config_server(apr_pool_t *p, void *parentconf,
     return (add->label) ? add : base;
 }
 
-static void *config_server(apr_pool_t *p, server_rec *s)
+static void *config_server(apr_pool_t *p, server_rec *s __unused)
 {
     myvhost_cfg_t *conf = apr_pcalloc(p, sizeof(myvhost_cfg_t));
     if (!dbd_prepare_fn) {
@@ -454,9 +460,8 @@ static void register_hooks(apr_pool_t *pool __unused)
 
 static const command_rec cmds[] =
 {
-    AP_INIT_ITERATE2("DBDocRoot", setVhostQuery,
-    NULL, RSRC_CONF,
-    "DBDocRoot  QUERY  [HOSTNAME|IP|PORT|URI[n]]..."),
+    AP_INIT_ITERATE2("DBDocRoot", setVhostQuery, NULL, RSRC_CONF,
+	"DBDocRoot  QUERY  [HOSTNAME|IP|PORT|URI[n]]..."),
     {NULL}
 };
 
