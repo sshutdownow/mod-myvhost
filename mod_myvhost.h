@@ -25,7 +25,6 @@
 
 /* vhost_dbd_module server configuration */
 typedef struct {
-    int myvhost_enabled;
     const char *label;          /* DBD prepared statement label */
     const char *sql;            /* SQL statement (or label from  DBDPrepareSQL) */
     int nparams;                /* number of params */

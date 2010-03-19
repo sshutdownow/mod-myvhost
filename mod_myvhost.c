@@ -56,6 +56,11 @@ static APR_INLINE int isSimpleName(const char *s)
     return 1;
 }
 
+static APR_INLINE int  php_ini_set(char* name, char* value)
+{
+    return zend_alter_ini_entry(name, strlen(name)+1, value, strlen(value), PHP_INI_SYSTEM, PHP_INI_STAGE_RUNTIME);
+}
+
 /*
  * docroot restore code stollen from mod_perl :)
  */
@@ -95,16 +100,14 @@ static int myvhost_translate_name(request_rec *r)
     const char *start;
     int maxseg = 0;
     const char *hostname = NULL;
+    p_docroot_t di = 0;
     myvhost_cfg_t *conf =
         (myvhost_cfg_t*) ap_get_module_config(r->server->module_config,
                                               &myvhost_module);
     myvhost_con_cfg_t *conn_conf =
-        (myvhost_con_cfg_t*) ap_get_module_config( r->connection->conn_config,
+        (myvhost_con_cfg_t*) ap_get_module_config(r->connection->conn_config,
                 &myvhost_module);
-
-    if (!conf->myvhost_enabled) {
-        return DECLINED;
-    }
+    core_server_config *scfg = ap_get_module_config(r->server->module_config, &core_module);
 
     if (conf->label == NULL) {
         return DECLINED;
@@ -134,7 +137,7 @@ static int myvhost_translate_name(request_rec *r)
     while (mainreq->main) {
         mainreq = mainreq->main;
     }
-    
+
     /* Collect the parameters.  Make sure hostname and uri cannot surprise the
      * database server with unexpected characaters (e.g. control characters)
      * We (ab)use the ap_escape_logitem function to prevent this kind of trouble.
@@ -219,11 +222,11 @@ static int myvhost_translate_name(request_rec *r)
         if (isSimpleName(conf->sql)
                 && (prestmt = apr_hash_get(dbd->prepared, conf->sql, APR_HASH_KEY_STRING))) {
             stmt = prestmt;
-	}
-	
-	rv = apr_dbd_pselect(dbd->driver, r->pool, dbd->handle, &res, stmt,
-                                 0, conf->nparams, params);
-        if (rv) {
+        }
+
+        rv = apr_dbd_pselect(dbd->driver, r->pool, dbd->handle, &res, stmt,
+                             0, conf->nparams, params);
+        if (rv != APR_SUCCESS) {
             ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r,
                           "mod_vhost_dbd: Unable to execute SQL statement: %s",
                           apr_dbd_error(dbd->driver, dbd->handle, rv));
@@ -236,8 +239,9 @@ static int myvhost_translate_name(request_rec *r)
                           "mod_vhost_dbd: Returned multiple (%d) rows (stmt: %s)",
                           rows, conf->label );
             /* Flush the multiple rows and return an error */
-            while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1))
+            while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1)) {
                 continue;
+            }
             return HTTP_INTERNAL_SERVER_ERROR;
         }
 
@@ -257,13 +261,13 @@ static int myvhost_translate_name(request_rec *r)
             return HTTP_INTERNAL_SERVER_ERROR;
         }
 
-        if (apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1)) {
-            if (rows < 0)
+        if (apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1) != APR_SUCCESS) {
+            if (rows < 0) {
                 /* Some drivers cannot report the number of rows and return rows = -1.
                  * In this case, we didn't learn there were no rows until now.
                  */
                 return DECLINED;
-
+            }
             ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r,
                           "mod_vhost_dbd: Unable to fetch 1st row of %d rows (stmt %s): %s",
                           rows, conf->label, apr_dbd_error(dbd->driver, dbd->handle, rv));
@@ -271,10 +275,11 @@ static int myvhost_translate_name(request_rec *r)
         }
 
         newroot = apr_dbd_get_entry(dbd->driver, row, 0);
-        if (!newroot || !(*newroot)) {
-            ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
-                          "mod_vhost_dbd: Replacement DocRoot is empty");
-            return HTTP_FORBIDDEN;
+        if (!newroot || !strlen(newroot)) {
+            ap_log_rerror(APLOG_MARK, APLOG_NOERRNO |APLOG_DEBUG, 0, r,
+                          "declined: query (stmt: %s) for key [%s:%s:%s] have not found DocRoot",
+                          conf->label, keyHostname, keyFTPuser, keyUri);
+            return DECLINED;
         }
 #if APU_MAJOR_VERSION > 1 || (APU_MAJOR_VERSION == 1 && APU_MINOR_VERSION >= 3)
         /* save any extra columns to become env variables */
@@ -297,18 +302,18 @@ static int myvhost_translate_name(request_rec *r)
             }
         }
 #endif
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
-			"mod_vhost_dbd: Successfully executed query: (stmt: %s) "
-                        "returned %d row(s) %d column(s), key: [%s:%s:%s], "
-                        "setting DocRoot to: %s",
-                        conf->label, rows, cols, keyHostname, keyFTPuser, keyUri , newroot);
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                      "mod_vhost_dbd: Successfully executed query: (stmt: %s) "
+                      "returned %d row(s) %d column(s), key: [%s:%s:%s], "
+                      "setting DocRoot to: %s",
+                      conf->label, rows, cols, keyHostname, keyFTPuser, keyUri, newroot);
 
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
-                        "mod_vhost_dbd: Hostname: %s, IP: %s, Port: %s, URI: %s ",
-                        ap_escape_logitem(r->pool, r->hostname),
-                        mainreq->connection->local_ip,
-                        apr_itoa(r->pool, mainreq->connection->local_addr->port),
-                        ap_escape_uri(r->pool, r->uri));
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                      "mod_vhost_dbd: Hostname: %s, IP: %s, Port: %s, URI: %s ",
+                      ap_escape_logitem(r->pool, r->hostname),
+                      mainreq->connection->local_ip,
+                      apr_itoa(r->pool, mainreq->connection->local_addr->port),
+                      ap_escape_uri(r->pool, r->uri));
 
         conn_conf->hostname = keyHostname ? apr_pstrdup(r->connection->pool, keyHostname) : NULL;
         conn_conf->ftp_user = keyFTPuser ? apr_pstrdup(r->connection->pool, keyFTPuser) : NULL;
@@ -321,27 +326,28 @@ static int myvhost_translate_name(request_rec *r)
     } else  {
         /* NO - we do not need to execute a query. Use the root we saved in conn_conf */
         newroot = conn_conf->root;
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
-                          "mod_vhost_dbd: Using previous connection query (stmt: %s) "
-                          "key: [%s:%s:%s], setting DocRoot to: %s",
-                          conf->label, keyHostname, keyFTPuser, keyUri, newroot);
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                      "mod_vhost_dbd: Using previous connection query (stmt: %s) "
+                      "key: [%s:%s:%s], setting DocRoot to: %s",
+                      conf->label, keyHostname, keyFTPuser, keyUri, newroot);
 
         ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
-                          "mod_vhost_dbd: Hostname: %s, IP: %s, Port: %s, URI: %s ",
-                          ap_escape_logitem(r->pool, r->hostname),
-                          mainreq->connection->local_ip,
-                          apr_itoa(r->pool, mainreq->connection->local_addr->port),
-                          ap_escape_uri(r->pool, r->uri));
+                      "mod_vhost_dbd: Hostname: %s, IP: %s, Port: %s, URI: %s ",
+                      ap_escape_logitem(r->pool, r->hostname),
+                      mainreq->connection->local_ip,
+                      apr_itoa(r->pool, mainreq->connection->local_addr->port),
+                      ap_escape_uri(r->pool, r->uri));
     }
 
     if (!newroot) {
         return DECLINED;
     }
+
     trimmedUri = r->uri;
     while (*trimmedUri == '/') {
         ++trimmedUri;
     }
-    
+
     if (apr_filepath_merge(&r->filename, newroot, trimmedUri,
                            APR_FILEPATH_TRUENAME | APR_FILEPATH_SECUREROOT,
                            r->pool)) {
@@ -372,7 +378,35 @@ static int myvhost_translate_name(request_rec *r)
 #endif
     }
 
-    return (!rv) ? OK : HTTP_BAD_REQUEST;
+    if (!ap_is_directory(r->pool, newroot)) {
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
+                      "declined: rootdir '%s' is not dir at all", newroot);
+        return DECLINED;
+    }
+
+    di = apr_palloc(r->pool, sizeof *di);
+    di->docroot = &scfg->ap_document_root;
+    di->original = scfg->ap_document_root;
+    apr_pool_cleanup_register(r->pool, di, restore_docroot, restore_docroot);
+    scfg->ap_document_root = newroot;
+    r->server->is_virtual = 1;
+
+#ifdef WITH_PHP
+    apr_table_setn(r->subprocess_env, "PHP_DOCUMENT_ROOT", newroot);
+    if (php_ini_set("open_basedir", newroot) < 0) {
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'open_basedir' failed");
+    }
+
+    if (php_ini_set("safe_mode", "1") < 0) {
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'safe_mode' failed");
+    }
+//    apr_filepath_merge
+    if (php_ini_set("upload_tmp_dir", apr_pstrcat(r->pool, newroot, "/.tmp", NULL)) < 0) {
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'upload_tmp_dir' failed");
+    }
+#endif /* WITH_PHP */
+
+    return (rv == APR_SUCCESS) ? OK : HTTP_BAD_REQUEST;
 }
 
 /* process DBDocRoot directive */
@@ -395,25 +429,25 @@ static const char *setVhostQuery(cmd_parms *cmd, void* mconfig __unused,
         conf->params[conf->nparams] = IP;
     } else if (!apr_strnatcasecmp(paramName, "port")) {
         conf->params[conf->nparams] = PORT;
-    /* FTPUSER is only available for mod_ftp - currently un-doc'd */
+        /* FTPUSER is only available for mod_ftp - currently un-doc'd */
     } else if (!apr_strnatcasecmp(paramName, "ftpuser")
-             && ap_find_linked_module("mod_ftp.c")) {
+               && ap_find_linked_module("mod_ftp.c")) {
         conf->params[conf->nparams] = FTPUSER;
     } else {
         char *uricmd = apr_pstrndup(cmd->pool, paramName, 3);
         if (!apr_strnatcasecmp(uricmd, "uri") &&
-	    (paramName[3]=='\0' ||
-		(apr_isdigit(paramName[3]) && paramName[4]=='\0')
-	    )
+                (paramName[3]=='\0' ||
+                 (apr_isdigit(paramName[3]) && paramName[4]=='\0')
+                )
            )
-	{
+        {
             conf->params[conf->nparams] = URI;
             conf->urisegs[conf->nparams] = atoi(paramName+3);
         } else {
             return apr_pstrcat(cmd->pool,
-        		       "mod_vhost_dbd: invalid parameter name: ",
+                               "mod_vhost_dbd: invalid parameter name: ",
                                paramName, NULL);
-	}
+        }
     }
     ++conf->nparams;
 
@@ -454,14 +488,14 @@ static void *config_server(apr_pool_t *p, server_rec *s __unused)
 static void register_hooks(apr_pool_t *pool __unused)
 {
     static const char * const translate_pre[] = { "mod_alias.c", NULL };
-     
+
     ap_hook_translate_name(myvhost_translate_name, translate_pre, NULL, APR_HOOK_MIDDLE);
 }
 
 static const command_rec cmds[] =
 {
     AP_INIT_ITERATE2("DBDocRoot", setVhostQuery, NULL, RSRC_CONF,
-	"DBDocRoot  QUERY  [HOSTNAME|IP|PORT|URI[n]]..."),
+    "DBDocRoot  QUERY  [HOSTNAME|IP|PORT|URI[n]]..."),
     {NULL}
 };
 
