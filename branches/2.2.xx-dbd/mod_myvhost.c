@@ -41,6 +41,8 @@ param_names_t paramNames;
 static APR_OPTIONAL_FN_TYPE(ap_dbd_prepare) *dbd_prepare_fn = NULL;
 static APR_OPTIONAL_FN_TYPE(ap_dbd_acquire) *dbd_acquire_fn = NULL;
 
+/* Ancillary functions */
+
 /* check if a string could be a label name */
 #define MAX_LABEL_SIZE 32
 /* longest env var name */
@@ -56,7 +58,7 @@ static APR_INLINE int isSimpleName(const char *s)
     return 1;
 }
 
-static APR_INLINE int  php_ini_set(char* name, char* value)
+static APR_INLINE int php_ini_set(char* name, char* value)
 {
     return zend_alter_ini_entry(name, strlen(name)+1, value, strlen(value), PHP_INI_SYSTEM, PHP_INI_STAGE_RUNTIME);
 }
@@ -101,6 +103,12 @@ static int myvhost_translate_name(request_rec *r)
     int maxseg = 0;
     const char *hostname = NULL;
     p_docroot_t di = 0;
+#ifdef WITH_PHP
+    char *tmpath = NULL;
+#endif
+#if APU_MAJOR_VERSION > 1 || (APU_MAJOR_VERSION == 1 && APU_MINOR_VERSION >= 3)
+    apr_hash_index_t *hidx;
+#endif
     myvhost_cfg_t *conf =
         (myvhost_cfg_t*) ap_get_module_config(r->server->module_config,
                                               &myvhost_module);
@@ -293,7 +301,7 @@ static int myvhost_translate_name(request_rec *r)
                 char str[MAX_ENV_NAME];
                 apr_cpystrn(str, name, MAX_ENV_NAME);
                 /* no bogus chars allowed in env var names - substitute underscores */
-                for (k=0 ; str[k]; k++)
+                for (k = 0 ; str[k]; k++)
                     if (!apr_isalnum(str[k]))
                         str[k] = '_';
                 apr_hash_set(conn_conf->envs,
@@ -321,8 +329,9 @@ static int myvhost_translate_name(request_rec *r)
         conn_conf->root = newroot ? apr_pstrdup(r->connection->pool, newroot) : NULL;
 
         /* fetch until -1 return to make sure results set gets cleaned up */
-        while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1))
+        while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1)) {
             continue;
+        }
     } else  {
         /* NO - we do not need to execute a query. Use the root we saved in conn_conf */
         newroot = conn_conf->root;
@@ -355,28 +364,24 @@ static int myvhost_translate_name(request_rec *r)
                       "mod_vhost_dbd: Cannot map %s to file with DocRoot %s",
                       r->the_request, newroot);
         return HTTP_FORBIDDEN;
-    } else {
-        /* got a good doc root - set it and save the result for this conn */
-#if APU_MAJOR_VERSION > 1 || (APU_MAJOR_VERSION == 1 && APU_MINOR_VERSION >= 3)
-        apr_hash_index_t *hidx;
-#endif
-
-        r->canonical_filename = r->filename;
-        conn_conf->root = apr_pstrdup(r->connection->pool, newroot);
-#if APU_MAJOR_VERSION > 1 || (APU_MAJOR_VERSION == 1 && APU_MINOR_VERSION >= 3)
-        /* set env variables - unset them if NULL or zero-length value */
-        for (hidx = apr_hash_first(r->pool, conn_conf->envs) ; hidx ; hidx = apr_hash_next(hidx)) {
-            const char *name ;
-            const char *val;
-            apr_hash_this(hidx, (void *)&name, NULL, (void *)&val);
-            if (val && *val) {
-                apr_table_set(r->subprocess_env, name, val);
-            } else {
-                apr_table_unset(r->subprocess_env, name);
-            }
-        }
-#endif
     }
+
+    /* got a good doc root - set it and save the result for this conn */
+    r->canonical_filename = r->filename;
+    conn_conf->root = apr_pstrdup(r->connection->pool, newroot);
+#if APU_MAJOR_VERSION > 1 || (APU_MAJOR_VERSION == 1 && APU_MINOR_VERSION >= 3)
+    /* set env variables - unset them if NULL or zero-length value */
+    for (hidx = apr_hash_first(r->pool, conn_conf->envs) ; hidx ; hidx = apr_hash_next(hidx)) {
+        const char *name ;
+        const char *val;
+        apr_hash_this(hidx, (void *)&name, NULL, (void *)&val);
+        if (val && *val) {
+            apr_table_set(r->subprocess_env, name, val);
+        } else {
+            apr_table_unset(r->subprocess_env, name);
+        }
+    }
+#endif
 
     if (!ap_is_directory(r->pool, newroot)) {
         ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
@@ -400,9 +405,13 @@ static int myvhost_translate_name(request_rec *r)
     if (php_ini_set("safe_mode", "1") < 0) {
         ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'safe_mode' failed");
     }
-//    apr_filepath_merge
-    if (php_ini_set("upload_tmp_dir", apr_pstrcat(r->pool, newroot, "/.tmp", NULL)) < 0) {
-        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'upload_tmp_dir' failed");
+
+    if (apr_filepath_merge(&tmpath, newroot, ".tmp", APR_FILEPATH_NATIVE, r->pool) == APR_SUCCESS &&
+            ap_is_directory(r->pool, tmpath))
+    {
+        if (php_ini_set("upload_tmp_dir", tmpath) < 0) {
+            ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'upload_tmp_dir' failed");
+        }
     }
 #endif /* WITH_PHP */
 

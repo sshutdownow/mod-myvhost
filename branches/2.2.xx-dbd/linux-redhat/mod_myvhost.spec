@@ -4,7 +4,7 @@
 Summary: Apache module for dynamically configured name-based mass virtual hosting with PHP.
 Name: mod_myvhost
 Version: 0.20
-Release: 1
+Release: 4
 License: Apache-2.0
 URL: http://code.google.com/p/mod-myvhost/
 Group: System Environment/Daemons
@@ -51,6 +51,10 @@ rm -rf %{buildroot}
 %attr(0644,root,root) %config(noreplace) %{_sysconfdir}/httpd/conf.d/zz%{name}.conf
 
 %changelog
+* Fri Mar 19 2010 Igor Popov <ipopovi@gmail.com>
+- DBD version seems to work, but missed some functionality.
+- DBD verion is heavily based on mod_vhost_dbd http://code.google.com/p/dbd-modules
+
 * Thu Feb 18 2010 Igor Popov <ipopovi@gmail.com>
 - vhosts that are defined in apache config and created on fly works together
 
@@ -66,7 +70,7 @@ rm -rf %{buildroot}
   by name or alias, for example:
     SELECT `rootdir` FROM `db` WHERE (`vname`='%1$s' OR `valias`='%1$s');
 - Also added expiremental feature - set uid and gid for suexec.
-                            
+
 * Sat Jun 03 2006 Igor Popov <ipopovi@gmail.com>
 - Added internal implementation of mysql_escape_string().
 - Some minor fixes.
