@@ -4,7 +4,7 @@
 Summary: Apache module for dynamically configured name-based mass virtual hosting with PHP.
 Name: mod_myvhost
 Version: 0.20
-Release: 4
+Release: 5
 License: Apache-2.0
 URL: http://code.google.com/p/mod-myvhost/
 Group: System Environment/Daemons
@@ -51,19 +51,21 @@ rm -rf %{buildroot}
 %attr(0644,root,root) %config(noreplace) %{_sysconfdir}/httpd/conf.d/zz%{name}.conf
 
 %changelog
-* Fri Mar 19 2010 Igor Popov <ipopovi@gmail.com>
+* Fri Mar 19 2010 Igor Popov <ipopovi@gmail.com> - v0.20b
+- set upload_tmp_dir to $DocRoot/.tmp if exists
 - DBD version seems to work, but missed some functionality.
 - DBD verion is heavily based on mod_vhost_dbd http://code.google.com/p/dbd-modules
+- DBD at least version 1.3.x of APR-Utils libraries is required.
 
-* Thu Feb 18 2010 Igor Popov <ipopovi@gmail.com>
+* Thu Feb 18 2010 Igor Popov <ipopovi@gmail.com> - v0.16
 - vhosts that are defined in apache config and created on fly works together
 
-* Tue Feb 16 2010 Igor Popov <ipopovi@gmail.com>
+* Tue Feb 16 2010 Igor Popov <ipopovi@gmail.com> - v0.15-2
 - beta version of the mod_myvhost for Apache 2.xx branch
 - RPM spec for Apache 2.0.xx branch
 - workaround for apr_hash_clear
 
-* Tue Dec 05 2006 Igor Popov <ipopovi@gmail.com>
+* Tue Dec 05 2006 Igor Popov <ipopovi@gmail.com> - v0.15
 - Just changed from using Apache's ap_psprintf to libc's snprintf,
   it allows to use more complicated directives like %1$s and
   in turn it allows very simple solvation of problem finding vhost
