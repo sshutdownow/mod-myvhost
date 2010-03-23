@@ -1,5 +1,6 @@
 #summary TODO
 
+ * Allow simultaneously using vhosts defined by original Apache's configuration file(s) and by *mod_myvhost*. (DONE)
  * Porting module to Apache 2.2.xx. (in progress)
- * Allow simultaneously using vhosts defined by original Apache's configuration file(s) and by *mod_myvhost*. (in progress)
- * Use *mod_dbd* instead of direct using MySQL. Additionally, mod_dbd give us opportunity to use many different databases, not only MySQL. 
+ * Use *mod_dbd* instead of direct using MySQL. Additionally, mod_dbd give us opportunity to use many different databases, not only MySQL. (in progress)
+ * Using caching system, for example, memcached.
