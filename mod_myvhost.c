@@ -54,11 +54,15 @@ static APR_OPTIONAL_FN_TYPE(ap_dbd_acquire) *dbd_acquire_fn = NULL;
 
 static APR_INLINE int isSimpleName(const char *s)
 {
-    if (strlen(s) > MAX_LABEL_SIZE)
+    if (strlen(s) > MAX_LABEL_SIZE) {
         return 0;
-    for (; *s ; s++)
-        if (!apr_isalnum(*s) && (*s != '_') && (*s != '-'))
+    }
+    while (*s) {
+        if (!apr_isalnum(*s) && (*s != '_') && (*s != '-')) {
             return 0;
+        }
+        s++;
+    }
     return 1;
 }
 
@@ -278,7 +282,7 @@ static int myvhost_translate_name(request_rec *r)
         cols = apr_dbd_num_cols(dbd->driver, res);
         if (!cols) {
             ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r,
-                          "mod_vhost_dbd: SQL statement returned no columns");
+                          "SQL statement returned no columns");
             return HTTP_INTERNAL_SERVER_ERROR;
         }
 
@@ -299,6 +303,7 @@ static int myvhost_translate_name(request_rec *r)
                       conf->label, rows, cols, keyHostname, keyFTPuser, keyUri);
 
         apr_hash_clear(conn_conf->envs);
+
         for (j = 0; j < cols ; j++) {
             const char *name = apr_dbd_get_name(dbd->driver, res, j);
             const char *value = apr_dbd_get_entry(dbd->driver, row, j);
@@ -308,27 +313,62 @@ static int myvhost_translate_name(request_rec *r)
             }
 
             if (!apr_strnatcasecmp(name, "DocumentRoot")) {
-                root = value;
-                if (!root || !strlen(root)) {
+                if (!value || !strlen(value)) {
                     /* fetch until -1 return to make sure results set gets cleaned up */
                     while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1)) {
                         continue;
                     }
-                    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO |APLOG_DEBUG, 0, r,
+                    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
                                   "declined: query (stmt: %s) for key [%s:%s:%s] have not found DocumentRoot",
                                   conf->label, keyHostname, keyFTPuser, keyUri);
                     return DECLINED;
                 }
+                root = apr_pstrdup(r->pool, value);
                 ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
                               "Successfully executed query: (stmt: %s) returned %d row(s) %d column(s), for key: [%s:%s:%s] DocumentRoot value is: %s",
                               conf->label, rows, cols, keyHostname, keyFTPuser, keyUri, root);
             } else if (!apr_strnatcasecmp(name, "ServerAdmin")) {
-                admin = value;
-                if (!admin || !strlen(admin)) {
+                if (!value || !strlen(value)) {
                     admin = apr_pstrcat(r->pool, "webmaster@", hostname, NULL);
+                } else {
+                    admin = apr_pstrdup(r->pool, value);
+
                 }
+#ifdef WITH_PHP
             } else if (!apr_strnatcasecmp(name, "php_admin")) {
-                php_admin = value;
+                char *last, *line;
+
+                if (!value || !strlen(value)) {
+                    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                                  "query (stmt: %s) for key [%s:%s:%s] returned empty value for php_admin",
+                                  conf->label, keyHostname, keyFTPuser, keyUri);
+                    continue;
+                }
+
+                php_admin = apr_pstrdup(r->pool, value);
+
+                apr_hash_clear(conn_conf->php_ini);
+
+                ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                              "query (stmt: %s) for key [%s:%s:%s] for php_admin returned [%s]",
+                              conf->label, keyHostname, keyFTPuser, keyUri, php_admin);
+                for (line = apr_strtok(php_admin, ";", &last); line != NULL; line = apr_strtok (NULL, ";", &last)) {
+                    char *php_name, *php_value;
+                    int idx;
+
+                    idx = ap_ind(line, '=');
+
+                    if (idx > 0) {
+                        line[idx] = '\0';
+                        php_name = line;
+                        php_value = line + idx + 1; /* it's safe */
+                        apr_hash_set(conn_conf->php_ini,
+                                     apr_pstrdup(r->connection->pool, php_name), APR_HASH_KEY_STRING,
+                                     apr_pstrdup(r->connection->pool, php_value));
+                    }
+
+                }
+#endif
             } else { /* save any extra columns to become env variables */
                 int k;
                 char str[MAX_ENV_NAME];
@@ -336,8 +376,9 @@ static int myvhost_translate_name(request_rec *r)
                 apr_cpystrn(str, name, MAX_ENV_NAME);
                 /* no bogus chars allowed in env var names - substitute underscores */
                 for (k = 0; str[k]; k++) {
-                    if (!apr_isalnum(str[k]))
+                    if (!apr_isalnum(str[k])) {
                         str[k] = '_';
+                    }
                 }
                 apr_hash_set(conn_conf->envs,
                              apr_pstrdup(r->connection->pool, str), APR_HASH_KEY_STRING,
@@ -349,6 +390,7 @@ static int myvhost_translate_name(request_rec *r)
         conn_conf->ftp_user = keyFTPuser ? apr_pstrdup(r->connection->pool, keyFTPuser) : NULL;
         conn_conf->uri = keyUri ? apr_pstrdup(r->connection->pool, keyUri) : NULL;
         conn_conf->root = root ? apr_pstrdup(r->connection->pool, root) : NULL;
+        conn_conf->admin = admin ? apr_pstrdup(r->connection->pool, admin) : NULL;
 
         /* fetch until -1 return to make sure results set gets cleaned up */
         while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1)) {
@@ -357,14 +399,22 @@ static int myvhost_translate_name(request_rec *r)
     } else  {
         /* NO - we do not need to execute a query. Use the root we saved in conn_conf */
         root = conn_conf->root;
+        admin = conn_conf->admin;
         ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
-                      "Using previous connection query (stmt: %s) key: [%s:%s:%s], setting DocumentRoot to: %s",
-                      conf->label, keyHostname, keyFTPuser, keyUri, root);
+                      "Using previous connection query (stmt: %s) key: [%s:%s:%s] for DocumentRoot [%s] and ServerAdmin [%s]",
+                      conf->label, keyHostname, keyFTPuser, keyUri, root, admin);
 
     }
 
-
     if (!root) {
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
+                      "declined: DocumentRoot is empty");
+        return DECLINED;
+    }
+
+    if (!ap_is_directory(r->pool, root)) {
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
+                      "declined: DocumentRoot [%s] is not dir at all", root);
         return DECLINED;
     }
 
@@ -377,7 +427,7 @@ static int myvhost_translate_name(request_rec *r)
                            APR_FILEPATH_TRUENAME | APR_FILEPATH_SECUREROOT,
                            r->pool)) {
         ap_log_rerror(APLOG_MARK, APLOG_ERR, rv, r,
-                      "mod_vhost_dbd: Cannot map %s to file with DocRoot %s",
+                      "forbidden: cannot map [%s] to file with DocumentRoot [%s]",
                       r->the_request, root);
         return HTTP_FORBIDDEN;
     }
@@ -398,20 +448,26 @@ static int myvhost_translate_name(request_rec *r)
         }
     }
 
-    if (!ap_is_directory(r->pool, root)) {
-        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
-                      "declined: rootdir '%s' is not dir at all", root);
-        return DECLINED;
-    }
-
     di = apr_palloc(r->pool, sizeof *di);
     di->docroot = &scfg->ap_document_root;
     di->original = scfg->ap_document_root;
     apr_pool_cleanup_register(r->pool, di, restore_docroot, restore_docroot);
     scfg->ap_document_root = root;
     r->server->is_virtual = 1;
+    r->server->server_admin = admin;
 
 #ifdef WITH_PHP
+    /* set php settings */
+    for (hidx = apr_hash_first(r->pool, conn_conf->php_ini); hidx; hidx = apr_hash_next(hidx)) {
+        const char *name ;
+        const char *val;
+        apr_hash_this(hidx, (void *)&name, NULL, (void *)&val);
+        if (php_ini_set(name, val) < 0) {
+            ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
+                          "zend_alter_ini_entry() set [%s] to [%s] failed", name, val);
+        }
+    }
+
     apr_table_setn(r->subprocess_env, "PHP_DOCUMENT_ROOT", root);
     if (php_ini_set("open_basedir", root) < 0) {
         ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'open_basedir' failed");
@@ -444,8 +500,9 @@ static const char *setVhostQuery(cmd_parms *cmd, void* mconfig __unused,
     if (!dbd_prepare_fn || !dbd_acquire_fn)
         return "mod_dbd must be enabled to use mod_vhost_dbd";
 
-    if (conf->nparams >= MAX_PARAMS)
-        return "mod_vhost_dbd: Too many parameters";
+    if (conf->nparams >= MAX_PARAMS) {
+        return "Too many parameters";
+    }
 
     if (!apr_strnatcasecmp(paramName, "hostname")) {
         conf->params[conf->nparams] = HOSTNAME;
@@ -469,20 +526,20 @@ static const char *setVhostQuery(cmd_parms *cmd, void* mconfig __unused,
             conf->urisegs[conf->nparams] = atoi(paramName+3);
         } else {
             return apr_pstrcat(cmd->pool,
-                               "mod_vhost_dbd: invalid parameter name: ",
+                               "invalid parameter name: ",
                                paramName, NULL);
         }
     }
     ++conf->nparams;
 
     if (!conf->label) {
-        conf->label = apr_pstrcat(cmd->pool, "vhost_dbd_",
+        conf->label = apr_pstrcat(cmd->pool, "myvhost_dbd_",
                                   apr_ltoa(cmd->pool, ++label_num), NULL);
         dbd_prepare_fn(cmd->server, sql, conf->label);
         conf->sql = sql;
 
         ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, cmd->server,
-                     "mod_vhost_dbd: Prepared query (stmt: %s) from: %s",
+                     "Prepared query (stmt: %s) from: %s",
                      conf->label, sql);
     }
     return NULL;
