@@ -2,6 +2,13 @@
 ==Changelog:==
 
 {{{
+* Fri Mar 19 2010 Igor Popov <ipopovi@gmail.com> - v0.20b
+- set upload_tmp_dir to $DocRoot/.tmp if exists
+- DBD version seems to work.
+- DBD verion is heavily based on mod_vhost_dbd http://code.google.com/p/dbd-modules
+- DBD at least version 1.3.x of APR-Utils libraries is required.
+}}}
+{{{
 * Thu Feb 18 2010 Igor Popov <ipopovi@gmail.com> - v0.16
 - vhosts that are defined in apache config and created on fly works together
 }}}
@@ -34,4 +41,3 @@
 * Sun Mar 19 2006 Igor Popov <ipopovi@gmail.com>
 - The first public release
 }}}
-      
