@@ -96,17 +96,17 @@ If exists directory DocumentRoot/.tmp than upload_tmp_dir sets to it.
 *php_admin* variable should contains pairs of php variables and their values delimited by equality sign, pairs in turn are separated by semicolon,
 for boolean variables you should use 1 and 0.
 
-* Some databases (for example: Firebird) may report errors when statements for *DBDocRoot* are prepared with [http://httpd.apache.org/docs/2.3/mod/mod_dbd.html#dbdpreparesql DBDPrepareSQL]. In this case, [http://httpd.apache.org/docs/2.3/mod/mod_dbd.html#dbdpreparesql DBDPrepareSQL] cannot be used for virtual host statements.
+ * Some databases (for example: Firebird) may report errors when statements for *DBDocRoot* are prepared with [http://httpd.apache.org/docs/2.3/mod/mod_dbd.html#dbdpreparesql DBDPrepareSQL]. In this case, [http://httpd.apache.org/docs/2.3/mod/mod_dbd.html#dbdpreparesql DBDPrepareSQL] cannot be used for virtual host statements.
 
-* For Apache 2.2 prior to version 2.2.9, use parameter markers appropriate to your database.  For example: Use *?* for [http://odbc-dbd.googlecode.com/ ODBC] or SQLite.  Use *%s* for MySQL, etc.
+ * For Apache 2.2 prior to version 2.2.9, use parameter markers appropriate to your database.  For example: Use *?* for [http://odbc-dbd.googlecode.com/ ODBC] or SQLite.  Use *%s* for MySQL, etc.
 
-* For Apache 2.2.9+ always use *%s* as a parameter marker in your SQL statement.  If your SQL statement contains other *%* characters (for example, in a LIKE clause), use *%%* to prevent them from being misinterpreted as parameter markers.
+ * For Apache 2.2.9+ always use *%s* as a parameter marker in your SQL statement.  If your SQL statement contains other *%* characters (for example, in a LIKE clause), use *%%* to prevent them from being misinterpreted as parameter markers.
 
-* For Apache 2.2.9+, any additional columns which are returned will set an [http://httpd.apache.org/docs/2.3/env.html environment variable] with the same name as the column name. If the column value is NULL, any existing [http://httpd.apache.org/docs/2.3/env.html environment variable] which matches the column name will be unset.
+ * For Apache 2.2.9+, any additional columns which are returned will set an [http://httpd.apache.org/docs/2.3/env.html environment variable] with the same name as the column name. If the column value is NULL, any existing [http://httpd.apache.org/docs/2.3/env.html environment variable] which matches the column name will be unset.
 
-* Using a URI *PARAM* increases the number of database queries required because each request requires a new query. Using only the leading portion of the URI can reduce the number of database queries required. When multiple requests are made on the same keep-alive connection which have the same URI`n` value, only one query is performed.
+ * Using a URI *PARAM* increases the number of database queries required because each request requires a new query. Using only the leading portion of the URI can reduce the number of database queries required. When multiple requests are made on the same keep-alive connection which have the same URI`n` value, only one query is performed.
 
-* If the URI is /alpha/beta/gamma/delta/index.html:
+ * If the URI is /alpha/beta/gamma/delta/index.html:
 {{{
 URI1 is /alpha
 URI2 is /alpha/beta
@@ -119,9 +119,9 @@ URI9 is /alpha/beta/gamma/delta/index.html
 URI  is /alpha/beta/gamma/delta/index.html
 }}}
 
-* If [http://httpd.apache.org/modules/ mod_ftp] is used, an additional *PARAM* name is available. *FTPUSER* can be specified to pass the logged-in FTP user name.
+ * If [http://httpd.apache.org/modules/ mod_ftp] is used, an additional *PARAM* name is available. *FTPUSER* can be specified to pass the logged-in FTP user name.
 This parameter is not available for HTTP requests.
-* Setting *[http://httpd.apache.org/docs/2.3/mod/core.html#loglevel LogLevel] debug* will print additional information in the Apache error log which can help to diagnose SQL query problems.
+ * Setting *[http://httpd.apache.org/docs/2.3/mod/core.html#loglevel LogLevel] debug* will print additional information in the Apache error log which can help to diagnose SQL query problems.
 
 ==Make it all working:==
 Just restart apache:
