@@ -36,16 +36,16 @@ typedef struct {
 
 __BEGIN_DECLS
 void cache_vhost_add(myvhost_cfg_t *cfg,
-		    const char *hostname,
-		    const char *root,
-		    const char *admin,
+                     const char *hostname,
+                     const char *root,
+                     const char *admin,
 #ifdef WITH_PHP
-		    const char *php_ini_conf,
+                     const char *php_ini_conf,
 #endif
 #ifdef WITH_UID_GID
-		    const int uid, const int gid,
+                     const int uid, const int gid,
 #endif
-		    const int hits);
+                     const int hits);
 void cache_vhost_del(myvhost_cfg_t *cfg, apr_hash_t *cache, const char *host);
 p_cache_t cache_vhost_find(myvhost_cfg_t *cfg, const char *hostname);
 void cache_vhost_flush(myvhost_cfg_t *cfg, apr_hash_t *cache, time_t older);
