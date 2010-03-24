@@ -12,25 +12,37 @@ httpd-devel
 apr-devel
 apr-util-devel
 }}}
+
 ===Download source code:===
 The latest version of *mod_myvhost* is [http://code.google.com/p/mod-myvhost/downloads/list/ here]
+
 ===Decompress the source:===
 {{{
 tar -xzvf mod_myvhost-x.xx.tar.gz
 }}}
+
 ===Building mod_myvhost:===
 There are some settings available at compile time: if you do not want [http://www.php.net/ php] support than remove -DWITH_PHP from CFLAGS in Makefile.
 Now just type `make`.
+
 ===Install mod_myvhost:===
 You have to have root privileges.
 {{{
 sudo make install
 }}}
+
 ==Installation from RPM==
 If you are running RedHat or CentOS it is easier to install module from rpm:
 {{{
 rpm -Uvh mod_myvhost-0.20-8.i386.rpm
 }}}
+
+If you are using Apache from 3rd party repository you have to rebiuld srpm and than install it.
+{{{
+rpmbuild --rebuild mod_myvhost-0.20-8.src.rpm
+rpm -Uvh /usr/src/redhat/RPMS/i386/mod_myvhost-0.20-8.i386.rpm
+}}}
+
 ==MySQL:==
 Now it is time to create database that will be used to store vhost configurations. You can use _vhosts.sql_ file as example.
 {{{
