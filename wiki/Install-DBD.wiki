@@ -1,0 +1,103 @@
+#summary Install instructions.
+#labels Featured,Phase-Deploy
+
+==Installation from Sources==
+
+===Prerequisities:===
+This packages usually are required for successful compilation:
+{{{
+httpd-devel
+apr-devel
+apr-util-devel
+}}}
+===Download source code:===
+The latest version of *mod_myvhost* is [http://code.google.com/p/mod-myvhost/downloads/list/ here]
+===Decompress the source:===
+{{{
+tar -xzvf mod_myvhost-x.xx.tar.gz
+}}}
+===Building mod_myvhost:===
+There are some settings available at compile time: if you do not want [http://www.php.net/ php] support than remove -DWITH_PHP from CFLAGS in Makefile.
+Now just type `make`.
+===Install mod_myvhost:===
+You have to have root privileges.
+{{{
+sudo make install
+}}}
+==Installation from RPM==
+If you are running RedHat or CentOS it is easier to install module from rpm:
+{{{
+rpm -Uvh mod_myvhost-0.20-8.i386.rpm
+}}}
+==MySQL:==
+Now it is time to create database that will be used to store vhost configurations. You can use _vhosts.sql_ file as example.
+{{{
+CREATE DATABASE `hosting`;
+USE `hosting`;
+
+CREATE TABLE `vhosts` (
+    `vhost` varchar(255) NOT NULL default '',
+#   `valias` varchar(255) NOT NULL default '',
+    `enabled` enum('yes','no') NOT NULL default 'no',
+    `rootdir` varchar(255) NOT NULL default '',
+    `admin` varchar(255) default '',
+    `extra_php_config` text,
+    UNIQUE KEY `vhostname` (`vhost`),
+    KEY `enabled` (`enabled`)
+) TYPE=MyISAM COMMENT='vhosts';
+
+GRANT SELECT ON hosting.vhosts TO 'nonpriv'@'localhost' IDENTIFIED BY 'MeGaPassvv0d';
+
+INSERT INTO `vhosts` VALUES ('w_3.vhost.net', 'yes', '/var/www/vhosts/01', 'w_3@vhost.net', 'enable_dl=0;default_charset=koi8-r;');
+INSERT INTO `vhosts` VALUES ('www.vhost.net', 'yes', '/var/www/vhosts/02', 'www@vhost.net', '');
+}}}
+Create database and table:
+{{{
+mysql -u root -p < vhosts.sql
+}}}
+==Apache:==
+Edit apache configuration file, you may use _httpd.conf.add_ as example, make sure that mod_myvhost.so is loaded after libphp5.so.
+And you must have Apache [http://people.apache.org/~niq/dbd.html DBD driver] and [http://httpd.apache.org/docs/2.3/mod/mod_dbd.html mod_dbd]
+loaded and configured to use *mod_myvhost*.
+
+{{{
+<IfModule mod_myvhost.c>
+DBDPersist On
+DBDriver mysql
+DBDParams "host=localhost dbname=hosting user=nonpriv pass=MeGaPassvv0d"
+DBDocRoot "SELECT `rootdir` AS DocumentRoot,`admin` AS ServerAdmin,`extra_php_config` AS php_admin FROM `vhosts` WHERE (`vhost` LIKE %s OR CONCAT_WS('.', 'www', `vhost`) LIKE %s) AND `enabled`='yes' LIMIT 1" HOSTNAME HOSTNAME
+
+<Directory "/var/www/vhosts">
+RewriteEngine on
+Options Indexes SymLinksIfOwnerMatch
+AllowOverride FileInfo
+Order allow,deny
+Allow from all
+</Directory>
+
+</IfModule>
+}}}
+
+=====DBDocRoot    SQL    [ PARAM ... ]=====
+*SQL* is an SQL statement.
+*PARAM ...* arguments are inserted into the SQL statement at request time.  Use one *PARAM* for each parameter marker in your SQL statement.  In the examples, *%s* is the parameter marker.  *PARAM* may be any of these words (space separated, not case sensitive):
+|| *HOSTNAME*||requested hostname|| _may be NULL if there is no Host header. e.g. HTTP 1.0 or FTP requests_ ||
+|| *IP*||server IP address|| _as a string, never NULL_ ||
+|| *PORT*||server port number|| _as string, never NULL_ ||
+|| *URI*||The request URI|| _never NULL_ ||
+|| *URI`n`* _where_ *`n`* _is 1-9_ ||Pass only the first `n` segments of the URI to the query|| _never NULL_ ||
+
+SQL request MUST return column that is called DocumentRoot and optional ServerAdmin and php_admin parameters all other values became environment for proccesses.
+If no vhost have found in DB, than request is served as usual.
+DocumentRoot is checked for existance and than it becomes *open_basedir* and safe mode is on by default.
+If exists directory DocumentRoot/.tmp than upload_tmp_dir sets to it.
+*php_admin* variable should contains pairs of php variables and their values delimited by equality sign, pairs in turn are separated by semicolon,
+for boolean variables you should use 1 and 0.
+
+==Make it all working:==
+Just restart apache:
+{{{
+apachectl stop; sleep 3; apachectl start
+}}}
+So, it should work now.
+This module is tested to compile and work on CentOS 5.4.

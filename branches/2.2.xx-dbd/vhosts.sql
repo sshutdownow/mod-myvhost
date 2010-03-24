@@ -18,7 +18,7 @@ CREATE TABLE `vhosts` (
     UNIQUE KEY `vhostname` (`vhost`, `valias`),
     KEY `enabled` (`enabled`)
 ) TYPE=MyISAM COMMENT='vhosts';
-		  
+
 GRANT SELECT ON `hosting`.`vhosts` TO 'nonpriv'@'localhost' IDENTIFIED BY 'MeGaPassvv0d';
 
 INSERT INTO `vhosts` VALUES ('w3.myvhost1.net', NULL, 'yes', '/var/www/vhosts/01', 'www@vhost1.net', 'enable_dl=0;default_charset=koi8-r;');
