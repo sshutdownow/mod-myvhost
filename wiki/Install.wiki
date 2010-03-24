@@ -6,8 +6,8 @@
 ===Prerequisities:===
 This packages usually are required for successful compilation:
 {{{
-httpd-dev
-mysql-dev
+httpd-devel
+mysql-devel
 }}}
 ===Download source code:===
 The latest version of *mod_myvhost* is [http://code.google.com/p/mod-myvhost/downloads/list/ here]
@@ -33,7 +33,7 @@ Now it is time to create database that will be used to store vhost configuration
 {{{
 CREATE DATABASE `hosting`;
 USE `hosting`;
-	    
+
 CREATE TABLE `vhosts` (
     `vhost` varchar(255) NOT NULL default '',
 #   `valias` varchar(255) NOT NULL default '',    
@@ -44,9 +44,9 @@ CREATE TABLE `vhosts` (
     UNIQUE KEY `vhostname` (`vhost`),
     KEY `enabled` (`enabled`)
 ) TYPE=MyISAM COMMENT='vhosts';
-					
+
 GRANT SELECT ON hosting.vhosts TO 'nonpriv'@'localhost' IDENTIFIED BY 'M3Ga PaSsVVd';
-					
+
 INSERT INTO `vhosts` VALUES ('w_3.vhost.net', 'yes', '/var/www/vhosts/01', 'w_3@vhost.net', 'enable_dl=0');
 INSERT INTO `vhosts` VALUES ('www.vhost.net', 'yes', '/var/www/vhosts/02', 'www@vhost.net', '');
 }}}	    
@@ -73,7 +73,7 @@ Edit apache configuration file, you may use _httpd.conf.add_ as example, make su
         Allow from all
     </Directory>
 </IfModule>
-}}}	    
+}}}
 
 The most important parameter that you should take into account is MyVhostQuery, it must contain one and only one %s (it is not true for version >= 0.15 ), that is substituted by vhostname from http request. If hostname is absent or no vhost found in DB, than request is served as usual.
 
