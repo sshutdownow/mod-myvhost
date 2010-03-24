@@ -43,8 +43,8 @@ rpmbuild --rebuild mod_myvhost-0.20-8.src.rpm
 rpm -Uvh /usr/src/redhat/RPMS/i386/mod_myvhost-0.20-8.i386.rpm
 }}}
 
-==MySQL:==
-Now it is time to create database that will be used to store vhost configurations. You can use _vhosts.sql_ file as example.
+==Database:==
+Now it is time to create database that will be used to store vhost's configurations. You can use _vhosts.sql_ file as example for *MySQL*:
 {{{
 CREATE DATABASE `hosting`;
 USE `hosting`;
@@ -65,14 +65,14 @@ GRANT SELECT ON hosting.vhosts TO 'nonpriv'@'localhost' IDENTIFIED BY 'MeGaPassv
 INSERT INTO `vhosts` VALUES ('w_3.vhost.net', 'yes', '/var/www/vhosts/01', 'w_3@vhost.net', 'enable_dl=0;default_charset=koi8-r;');
 INSERT INTO `vhosts` VALUES ('www.vhost.net', 'yes', '/var/www/vhosts/02', 'www@vhost.net', '');
 }}}
+
 Create database and table:
 {{{
 mysql -u root -p < vhosts.sql
 }}}
+
 ==Apache:==
-Edit apache configuration file, you may use _httpd.conf.add_ as example, make sure that mod_myvhost.so is loaded after libphp5.so.
-And you must have Apache [http://people.apache.org/~niq/dbd.html DBD driver] and [http://httpd.apache.org/docs/2.3/mod/mod_dbd.html mod_dbd]
-loaded and configured to use *mod_myvhost*.
+Edit apache configuration file, you may use _httpd.conf.add_ as example:
 
 {{{
 <IfModule mod_myvhost.c>
@@ -92,6 +92,10 @@ Allow from all
 </IfModule>
 }}}
 
+
+ * You must have Apache [http://people.apache.org/~niq/dbd.html DBD driver] and [http://httpd.apache.org/docs/2.3/mod/mod_dbd.html mod_dbd] loaded and configured.
+ * To be able to change php settins mod_myvhost.so _MUST_ be loaded after libphp5.so.
+
 ====DBDocRoot    SQL    [ PARAM ... ]====
 *SQL* is an SQL statement.
 *PARAM ...* arguments are inserted into the SQL statement at request time.  Use one *PARAM* for each parameter marker in your SQL statement.  In the examples, *%s* is the parameter marker.  *PARAM* may be any of these words (space separated, not case sensitive):
@@ -101,23 +105,16 @@ Allow from all
 || *URI*||The request URI|| _never NULL_ ||
 || *URI`n`* _where_ *`n`* _is 1-9_ ||Pass only the first `n` segments of the URI to the query|| _never NULL_ ||
 
-SQL request MUST return column that is called DocumentRoot and optional ServerAdmin and php_admin parameters all other values became environment for proccesses.
-If no vhost have found in DB, than request is served as usual.
-DocumentRoot is checked for existance and than it becomes *open_basedir* and safe mode is on by default.
-If exists directory DocumentRoot/.tmp than upload_tmp_dir sets to it.
-*php_admin* variable should contains pairs of php variables and their values delimited by equality sign, pairs in turn are separated by semicolon,
-for boolean variables you should use 1 and 0.
-
- * Some databases (for example: Firebird) may report errors when statements for *DBDocRoot* are prepared with [http://httpd.apache.org/docs/2.3/mod/mod_dbd.html#dbdpreparesql DBDPrepareSQL]. In this case, [http://httpd.apache.org/docs/2.3/mod/mod_dbd.html#dbdpreparesql DBDPrepareSQL] cannot be used for virtual host statements.
-
- * For Apache 2.2 prior to version 2.2.9, use parameter markers appropriate to your database.  For example: Use *?* for [http://odbc-dbd.googlecode.com/ ODBC] or SQLite.  Use *%s* for MySQL, etc.
-
- * For Apache 2.2.9+ always use *%s* as a parameter marker in your SQL statement.  If your SQL statement contains other *%* characters (for example, in a LIKE clause), use *%%* to prevent them from being misinterpreted as parameter markers.
-
+ * SQL request MUST return column that is called *DocumentRoot* and optional *ServerAdmin* and *php_admin* columns.
  * For Apache 2.2.9+, any additional columns which are returned will set an [http://httpd.apache.org/docs/2.3/env.html environment variable] with the same name as the column name. If the column value is NULL, any existing [http://httpd.apache.org/docs/2.3/env.html environment variable] which matches the column name will be unset.
-
+ * If no vhost have found in DB, than request is served as usual, i.e. you can use vhosts that are defined in _httpd.conf_.
+ * *DocumentRoot* is checked to be an real direcory, and *mod_myvhost* sets php's *open_basedir* to *DocumentRoot* and turn on *safe_mode*.
+ * If exists directory DocumentRoot/.tmp than php's *upload_tmp_dir* sets to it.
+ * If *php_admin* column is returned by SQL request, module parses it and sets php. *php_admin* string should contains pairs of php variables and their values delimited by equality sign, pairs in turn are separated by semicolon, for boolean variables you should use 1 and 0. There are should be no spaces. 
+ * Some databases (for example: Firebird) may report errors when statements for *DBDocRoot* are prepared with [http://httpd.apache.org/docs/2.3/mod/mod_dbd.html#dbdpreparesql DBDPrepareSQL]. In this case, [http://httpd.apache.org/docs/2.3/mod/mod_dbd.html#dbdpreparesql DBDPrepareSQL] cannot be used for virtual host statements.
+ * For Apache 2.2 prior to version 2.2.9, use parameter markers appropriate to your database.  For example: Use *?* for [http://odbc-dbd.googlecode.com/ ODBC] or SQLite.  Use *%s* for MySQL, etc.
+ * For Apache 2.2.9+ always use *%s* as a parameter marker in your SQL statement.  If your SQL statement contains other *%* characters (for example, in a LIKE clause), use *%%* to prevent them from being misinterpreted as parameter markers.
  * Using a URI *PARAM* increases the number of database queries required because each request requires a new query. Using only the leading portion of the URI can reduce the number of database queries required. When multiple requests are made on the same keep-alive connection which have the same URI`n` value, only one query is performed.
-
  * If the URI is /alpha/beta/gamma/delta/index.html:
 {{{
 URI1 is /alpha
@@ -130,9 +127,7 @@ URI6 is /alpha/beta/gamma/delta/index.html
 URI9 is /alpha/beta/gamma/delta/index.html
 URI  is /alpha/beta/gamma/delta/index.html
 }}}
-
- * If [http://httpd.apache.org/modules/ mod_ftp] is used, an additional *PARAM* name is available. *FTPUSER* can be specified to pass the logged-in FTP user name.
-This parameter is not available for HTTP requests.
+ * If [http://httpd.apache.org/modules/ mod_ftp] is used, an additional *PARAM* name is available. *FTPUSER* can be specified to pass the logged-in FTP user name. This parameter is not available for HTTP requests.
  * Setting *[http://httpd.apache.org/docs/2.3/mod/core.html#loglevel LogLevel] debug* will print additional information in the Apache error log which can help to diagnose SQL query problems.
 
 ==Make it all working:==
