@@ -1,683 +1,592 @@
 /*
- * Copyright (c) 2005-2006 Igor Popov <igorpopov@newmail.ru>
+ * Copyright (c) 2010 Igor Popov <ipopovi@gmail.com>
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy
- * of the License at
+ * MOD_MYVHOST DBD version
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * MOD_VHOST_DBD  Apache 2.2 module
+ *
+ * Copyright 2008 Tom Donovan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations
- * under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
  */
-
-static const char cvsid[] = "$Id$";
-
 
 #define CORE_PRIVATE
 
 #include "myvhost_include.h"
+#include "mod_myvhost.h"
+#include "mod_myvhost_cache.h"
+#include "mod_myvhost_php.h"
 
-module MODULE_VAR_EXPORT myvhost_module;
-
-static int myvhost_setup(server_rec *s)
-{
-    myvhost_cfg_t *cfg = ap_get_module_config(s->module_config, &myvhost_module);
-
-    cfg->mysql_connected = 0;
-
-    if (!cfg->myvhost_enabled) {
-	ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, s,
-		"module is disabled, but tried to connect to MySQL server");
-	return -1;
-    }
-    /* This should never ever ever happen */
-    if (!cfg->mysql) {
-	ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, s, "MySQL handle is NULL");
-	return -1;
-    }
-    if (!mysql_real_connect(cfg->mysql, cfg->mysql_host, cfg->mysql_user,
-			    cfg->mysql_pass, cfg->mysql_dbname, cfg->mysql_inetsock, cfg->mysql_unixsock, 0)) {
-	ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, s,
-		     "failed to connect to database '%s': %s", cfg->mysql_dbname, mysql_error(cfg->mysql));
-	cfg->mysql_connected = 0;
-	return -1;
-    }
-#ifdef DEBUG
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, s, "mod_myvhost connected to MySQL");
+#if (APU_MAJOR_VERSION < 1) || (APU_MAJOR_VERSION == 1 && APU_MINOR_VERSION < 3)
+#error "At least version 1.3.x of APR-Utils libraries is required"
 #endif
-    cfg->mysql_connected = 1;
 
-    return 0;
-}
 
-static void *myvhost_create_server_config(pool *p, server_rec *s)
+static const char __unused cvsid[] = "$Id$";
+
+module AP_MODULE_DECLARE_DATA myvhost_module;
+
+/* parameter codes */
+param_names_t paramNames;
+
+/* optional functions imported from mod_dbd */
+static APR_OPTIONAL_FN_TYPE(ap_dbd_prepare) *dbd_prepare_fn = NULL;
+static APR_OPTIONAL_FN_TYPE(ap_dbd_acquire) *dbd_acquire_fn = NULL;
+
+/* Ancillary functions */
+
+/* check if a string could be a label name */
+#define MAX_LABEL_SIZE 32
+/* longest env var name */
+#define MAX_ENV_NAME 32
+
+static APR_INLINE int isSimpleName(const char *s)
 {
-    myvhost_cfg_t *cfg = (myvhost_cfg_t *)ap_pcalloc(p, sizeof(myvhost_cfg_t));
-
-    return (void *)cfg;
-}
-
-static void *myvhost_merge_server_config(pool *p, void *base, void *override)
-{
-    myvhost_cfg_t *new_conf = (myvhost_cfg_t *)ap_pcalloc(p, sizeof(myvhost_cfg_t));
-    myvhost_cfg_t *base_conf = (myvhost_cfg_t *)base;
-    myvhost_cfg_t *override_conf = (myvhost_cfg_t *)override;
-
-    new_conf->mysql = ap_pcalloc(p, sizeof(MYSQL));
-    mysql_init(new_conf->mysql);
-
-    new_conf->myvhost_enabled = (override_conf->myvhost_enabled == 1) ? 1 : 0;
-    new_conf->mysql_connected = 0;
-    new_conf->mysql_host = base_conf->mysql_host;
-    new_conf->mysql_user = base_conf->mysql_user;
-    new_conf->mysql_pass = base_conf->mysql_pass;
-    new_conf->mysql_dbname = base_conf->mysql_dbname;
-    new_conf->mysql_inetsock = base_conf->mysql_inetsock;
-    new_conf->mysql_unixsock = base_conf->mysql_unixsock;
-    new_conf->mysql_vhost_query = (override_conf->mysql_vhost_query == NULL) ?
-	base_conf->mysql_vhost_query : override_conf->mysql_vhost_query;
-    new_conf->default_host = base_conf->default_host;
-    new_conf->default_root = base_conf->default_root;
-#ifdef WITH_CACHE
-    new_conf->cache_enabled = (override_conf->cache_enabled == 1) ? 1 : 0;
-    new_conf->pool = ap_make_sub_pool(p);
-
-    new_conf->cache = ap_hash_overlay(new_conf->pool, override_conf->cache, base_conf->cache);
-#endif
-    return new_conf;
-}
-
-static void myvhost_child_init(server_rec *s, pool *p)
-{
-    myvhost_cfg_t *cfg =
-    ap_get_module_config(s->module_config, &myvhost_module);
-
-#ifdef WITH_CACHE
-    cfg->pool = ap_make_sub_pool(p);
-    cfg->cache = ap_hash_make(cfg->pool);
-#endif
-    cfg->mysql = ap_pcalloc(p, sizeof(MYSQL));
-    mysql_init(cfg->mysql);
-    myvhost_setup(s);
-#ifdef DEBUG
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, s, "child init");
-#endif
-}
-
-static void myvhost_child_exit(server_rec *s, pool *p)
-{
-    myvhost_cfg_t *cfg =
-    ap_get_module_config(s->module_config, &myvhost_module);
-
-    if (cfg->mysql_connected) {
-	mysql_close(cfg->mysql);
+    if (strlen(s) > MAX_LABEL_SIZE) {
+        return 0;
     }
-#ifdef WITH_CACHE
-    ap_destroy_pool(cfg->pool);
-#endif    
-#ifdef DEBUG
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, s, "child exit");
-#endif
-}
-
-static void cleanup_mysql_result(void *result)
-{
-    if (result) {
-	mysql_free_result((MYSQL_RES *) result);
-	result = 0;
+    while (*s) {
+        if (!apr_isalnum(*s) && (*s != '_') && (*s != '-')) {
+            return 0;
+        }
+        s++;
     }
+    return 1;
 }
 
-static void reg_cleanup_mysql_result(pool *p, MYSQL_RES * result)
+static APR_INLINE int php_ini_set(char* name, char* value)
 {
-    ap_register_cleanup(p, (void *)result, cleanup_mysql_result, &ap_null_cleanup);
-}
-
-static void run_cleanup_mysql_result(pool *p, MYSQL_RES * result)
-{
-    ap_run_cleanup(p, (void *)result, &cleanup_mysql_result);
-}
-
-static void default_host(myvhost_cfg_t *cfg, core_server_config *scfg, request_rec *r)
-{
-    /* set default values */
-    scfg->ap_document_root = ap_pstrdup(r->pool, cfg->default_root);
-    r->server->server_hostname = ap_pstrdup(r->pool, cfg->default_host);
-    r->server->server_uid = ap_user_id;
-    r->server->server_gid = ap_group_id;
-    r->server->server_admin = ap_pstrcat(r->pool, "webmaster@", cfg->default_host, NULL);
-    r->server->is_virtual = 0;
-
-#ifdef WITH_PHP
-    if (zend_restore_ini_entry("open_basedir", sizeof("open_basedir"), PHP_INI_STAGE_RUNTIME) < 0) {
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r, "zend_restore_ini_entry() failed");
-    }
-    if (zend_restore_ini_entry("open_basedir", sizeof("safe_mode"), PHP_INI_STAGE_RUNTIME) < 0) {
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r, "zend_restore_ini_entry() failed");
-    }
-#endif
+    return zend_alter_ini_entry(name, strlen(name)+1, value, strlen(value), PHP_INI_SYSTEM, PHP_INI_STAGE_RUNTIME);
 }
 
 /*
-* main function
-*/
-static int myvhost_translate(request_rec *r)
-{
-    myvhost_cfg_t *cfg =
-    ap_get_module_config(r->server->module_config, &myvhost_module);
-    core_server_config *scfg =
-    ap_get_module_config(r->server->module_config, &core_module);
-    char *query = 0;
-    char *safe_hostname = 0;
-    int hostname_len = 0;
-    MYSQL_RES *res_set = 0;
-    MYSQL_ROW row;
-    int num_fields_fetched = 0;
-    char *rootdir = 0;
-    char *admin = 0;
-
-#ifdef WITH_PHP
-    char *php_ini_conf = 0;
-#endif
-#ifdef WITH_CACHE
-    p_cache_t vhost = 0;
-#endif
-#ifdef WITH_UID_GID
-    unsigned int uid = ap_user_id, gid = ap_group_id;
-#endif
-
-    if (!cfg->myvhost_enabled) {
-	return DECLINED;
-    }
-
-    if (r->main) {
-#ifdef DEBUG
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "declined: subrequest");
-#endif
-	return DECLINED;
-    }
-
-    if (!cfg->mysql_vhost_query) {	/* it is seemed to be redundant, but
-					 * it should be there */
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, r, "declined: !mysql_vhost_query");
-	return DECLINED;
-    }
-
-    if (!r->hostname) {
-#ifdef DEBUG
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
-		      "declined: no hostname found in request");
-#endif
-	return DECLINED;
-    }
-
-    if (ap_ind(r->hostname, '\'') != -1 || ap_ind(r->hostname, '\\') != -1) {
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
-	    "declined: invalid character(s) in hostname '%s'", r->hostname);
-	return DECLINED;
-    }
-
-    if (r->uri == 0 || r->uri[0] != '/') {
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
-		      "declined: uri has no leading '/'");
-	return DECLINED;
-    }
-
-    if (!strcasecmp(r->hostname, cfg->default_host)) {
-#ifdef DEBUG
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "declined: request to default host");
-#endif
-	default_host(cfg, scfg, r);
-	return DECLINED;
-    }
-
-#ifdef WITH_CACHE
-    if ((vhost = cache_vhost_find(cfg, r->hostname)) != 0) {
-	if (vhost->hits > 0) {
-	    rootdir = vhost->root;
-	    admin = vhost->admin;
-#ifdef WITH_PHP
-	    php_ini_conf = vhost->php_ini_conf;
-#endif
-#ifdef WITH_UID_GID
-	    uid = vhost->uid;
-	    gid = vhost->gid;
-#endif
-#ifdef DEBUG
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
-		  "cache: vhost '%s' found in positive cache", r->hostname);
-#endif
-	    goto VHOST_FOUND;	/* I don't like goto, but sometimes it can be
-				 * usefull. */
-	} else if (vhost->hits < 0) {
-#ifdef DEBUG
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
-	       "declined: vhost '%s' found in negative cache", r->hostname);
-#endif
-	    default_host(cfg, scfg, r);
-	    return DECLINED;
-	}
-    }
-#endif /* WITH_CACHE */
-
-    if ((!cfg->mysql_connected || mysql_ping(cfg->mysql)) && myvhost_setup(r->server) < 0) {
-	default_host(cfg, scfg, r);
-	return DECLINED;
-    }
-
-    hostname_len = strlen(r->hostname);
-    safe_hostname = ap_pcalloc(r->pool, hostname_len * 2 + 1);
-#if 1
-    escape_sql(r->hostname, hostname_len, safe_hostname, hostname_len * 2 + 1);
-#else
-#ifdef HAVE_MYSQL_REAL_ESCAPE_STRING
-    mysql_real_escape_string(cfg->mysql, safe_hostname, r->hostname, hostname_len);
-#else
-    mysql_escape_string(safe_hostname, r->hostname, hostname_len);
-#endif
-#endif
-    query = ap_psprintf(r->pool, cfg->mysql_vhost_query, safe_hostname, NULL);
-
-    ap_block_alarms();		/* to prevent memleaks from mysql library */
-
-    if (mysql_real_query(cfg->mysql, query, strlen(query))) {	/* query failed */
-	ap_unblock_alarms();
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r,
-		      "declined: error in mysql query '%s' %s", query, mysql_error(cfg->mysql));
-	ap_table_setn(r->subprocess_env, "MYVHOST_ERR", "MYSQL_QUERY_ERROR");
-	return DECLINED;
-    }
-    /* we have data */
-    res_set = mysql_store_result(cfg->mysql);
-    reg_cleanup_mysql_result(r->pool, res_set);
-
-    ap_unblock_alarms();
-
-    row = mysql_fetch_row(res_set);
-    if (!row) {
-	ap_block_alarms();
-	{
-	    run_cleanup_mysql_result(r->pool, res_set);
-#ifdef WITH_CACHE
-	    cache_vhost_add(cfg, r->hostname, 0, 0,
-#ifdef WITH_PHP
-	    0,
-#endif
-#ifdef WITH_UID_GID
-	    -1, -1,
-#endif
-	    -1);
-#endif /* WITH_CACHE */
-	}
-	ap_unblock_alarms();
-#if defined(DEBUG) && defined(WITH_CACHE)
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
-		  "cache: vhost '%s' added to negative cache", r->hostname);
-#endif
-	ap_table_setn(r->subprocess_env, "MYVHOST_ERR", "VHOST_NOT_FOUND");
-	default_host(cfg, scfg, r);
-#ifdef DEBUG
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
-		      "declined: hostname '%s' not found", r->hostname);
-#endif
-	return DECLINED;
-    }
-    
-    if ((num_fields_fetched = mysql_num_fields(res_set)) > 0) {
-	struct stat finfo;
-
-#ifdef  WITH_PHP
-#define PHP_INDEX (2 + 1)
-#else
-#define	PHP_INDEX 2
-#endif
-
-#ifdef WITH_UID_GID  
-#define	UID_GID_INDEX (PHP_INDEX + 2)
-#else
-#define	UID_GID_INDEX (PHP_INDEX)
-#endif
-
-	switch (num_fields_fetched) {
-	default:
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r,
-			  "there are too many fields (%d) in mysql response",
-			  num_fields_fetched);
-#ifdef WITH_UID_GID
-        case UID_GID_INDEX:
-	    if (row[UID_GID_INDEX-1]) {
-		gid = ap_strtol(row[UID_GID_INDEX-1], 0, 10);
-		if (!gid) {
-		    gid = ap_group_id;
-		    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
-				    "trying to set gid to zero");
-		}
-	    }
-	    
-	case UID_GID_INDEX-1:
-	    if (row[UID_GID_INDEX-2]) {
-		uid = ap_strtol(row[UID_GID_INDEX-2], 0, 10);
-		if (!uid) {
-		    uid = ap_group_id;
-		    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
-				    "trying to set uid to root");
-		}
-	    }
-#endif /* WITH_UID_GID */	    
-#ifdef WITH_PHP	    
-	case PHP_INDEX:
-	    if (row[PHP_INDEX-1]) {
-		php_ini_conf = ap_pstrdup(r->pool, row[PHP_INDEX-1]);
-	    }
-#endif /* WITH_PHP */
-	case 2:
-	    if (row[1]) {
-		admin = ap_pstrdup(r->pool, row[1]);
-	    } else {
-		admin = ap_pstrcat(r->pool, "webmaster@", r->hostname, NULL);
-	    }
-	    
-	case 1:
-	    if (row[0]) {
-		rootdir = ap_pstrdup(r->pool, row[0]);
-	    }
-	}
-
-	ap_block_alarms(); /* to avoid memleaks */
-	{
-	    run_cleanup_mysql_result(r->pool, res_set);
-	}
-	ap_unblock_alarms();
-
-	if (!rootdir) {
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, r,
-			"declined: no rootdir for vhost '%s'", r->hostname);
-	    return DECLINED;
-	}
-
-VHOST_FOUND:
-	if (!ap_is_directory(rootdir)) {
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r,
-		       "declined: rootdir '%s' is not dir at all", rootdir);
-	    ap_table_setn(r->subprocess_env, "MYVHOST_ERR", "WRONG_ROOTDIR");
-	    return DECLINED;
-	}
-
-	scfg->ap_document_root = rootdir;
-	r->server->server_hostname = ap_pstrdup(r->pool, r->hostname);
-	r->parsed_uri.hostname = r->server->server_hostname;
-	r->parsed_uri.hostinfo = r->server->server_hostname;
-	r->parsed_uri.path = ap_pstrcat(r->pool, rootdir, r->parsed_uri.path, NULL);
-	r->server->is_virtual = 1;
-#ifdef WITH_UID_GID	
-	r->server->server_gid = uid;
-	r->server->server_uid = gid;
-#else
-	r->server->server_gid = ap_group_id;
-	r->server->server_uid = ap_user_id;
-#endif	
-	r->server->server_admin = admin;
-	ap_table_setn(r->subprocess_env, "SERVER_ROOT", rootdir);
-
-#ifdef WITH_CACHE
-	if (!vhost) { /* not found in cache */
-	    ap_block_alarms();	/* to not break cache */
-	    {
-		cache_vhost_add(cfg, r->hostname, rootdir, admin,
-#ifdef WITH_PHP
-				php_ini_conf,
-#endif
-#ifdef WITH_UID_GID
-				uid, gid,
-#endif
-				1);
-	    }
-	    ap_unblock_alarms();
-#ifdef DEBUG
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
-		  "cache: vhost '%s' added to positive cache", r->hostname);
-#endif /* DEBUG */
-	}
-#endif /* WITH_CACHE */
-
-	r->filename = ap_pstrcat(r->pool, rootdir, "/", r->uri, NULL);
-	ap_no2slash(r->filename);
-
-	if (r->filename && stat(r->filename, &finfo) != -1) {
-	    r->finfo = finfo;
-	} else {
-#ifdef DEBUG
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r,
-			  "declined: file '%s' doesn't exist", r->filename);
-#endif /* DEBUG */
-	    return DECLINED;
-	}
-
-#ifdef WITH_PHP
-	ap_table_setn(r->subprocess_env, "PHP_DOCUMENT_ROOT", rootdir);
-	if (zend_alter_ini_entry("open_basedir", sizeof("open_basedir"), rootdir, strlen(rootdir), PHP_INI_SYSTEM, PHP_INI_STAGE_RUNTIME) < 0) {
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r, "zend_alter_ini_entry() set 'open_basedir' failed");
-	}
-
-	if (zend_alter_ini_entry("safe_mode", sizeof("safe_mode"), "1", 1, PHP_INI_SYSTEM, PHP_INI_STAGE_RUNTIME) < 0) {
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, r, "zend_alter_ini_entry() set 'safe_mode' failed");
-	}
-
-	if (php_ini_conf) {	/* there is an extra php config */
-	    char *linend, *value;
-
-#ifdef DEBUG
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "php config is '%s'", php_ini_conf);
-#endif
-	    /* Of course strtok_r is better, but it is not standard */
-	    while ((linend = strchr(php_ini_conf, ';')) != NULL) {
-		*linend++ = '\0';
-		value = strchr(php_ini_conf, '=');
-		if ((value = strchr(php_ini_conf, '=')) != NULL) {
-		    *value++ = '\0';
-#ifdef DEBUG
-		    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "setting '%s' to '%s'", php_ini_conf, value);
-#endif
-		    if (zend_alter_ini_entry(php_ini_conf, strlen(php_ini_conf) + 1, value, strlen(value), PHP_INI_SYSTEM, PHP_INI_STAGE_RUNTIME) < 0) {
-			ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r, "zend_alter_ini_entry() failed");
-		    }
-		}
-		if (linend) {
-		    php_ini_conf = linend;
-		}
-	    }
-
-	    if (php_ini_conf && *php_ini_conf && (value = strchr(php_ini_conf, '=')) != NULL) {
-		*value++ = '\0';
-#ifdef DEBUG
-		ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "setting php param '%s' to value '%s'", php_ini_conf, value);
-#endif
-		if (zend_alter_ini_entry(php_ini_conf, strlen(php_ini_conf) + 1, value, strlen(value), PHP_INI_SYSTEM, PHP_INI_STAGE_RUNTIME) < 0) {
-		    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, r, "zend_alter_ini_entry() failed");
-		}
-	    }
-	}
-#endif /* WITH_PHP */
-
-#ifdef DEBUG
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "OK: translate '%s%s' to '%s'", r->hostname, r->uri, r->filename);
-#endif
-	return OK;
-    }
-    /* not for us */
-#ifdef DEBUG
-    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, r, "declined");
-#endif
-    return DECLINED;
-}
-
-/*
- * config stuff
+ * docroot restore code stollen from mod_perl :)
  */
-static const char *set_host(cmd_parms *cmd, void *__unused__, char *arg)
-{
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
-					      &myvhost_module);
 
-    if (!arg || !strlen(arg)) {
-	return "mysql db host must be set";
-    }	
-    cfg->mysql_host = ap_pstrdup(cmd->pool, arg);
-    return NULL;
+typedef struct  {
+    const char **docroot;
+    const char *original;
+} docroot_t, *p_docroot_t;
+
+/* docroot cleanup handler */
+static apr_status_t restore_docroot(void *data)
+{
+    p_docroot_t di = (p_docroot_t)data;
+    *di->docroot  = di->original;
+    return APR_SUCCESS;
 }
 
-static const char *set_user(cmd_parms *cmd, void *__unused__, char *arg)
+/* set the document root for this request - called by a translate_name hook */
+static int myvhost_translate_name(request_rec *r)
 {
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
-					      &myvhost_module);
+    request_rec *mainreq = r;
+    apr_dbd_results_t *res = NULL;
+    apr_dbd_row_t *row = NULL;
+    ap_dbd_t *dbd;
+    apr_dbd_prepared_t *stmt;
+    apr_dbd_prepared_t *prestmt;
+    int rows = 0;
+    int cols = 0;
+    int rv = 0;
+    int i, j;
+    const char **params;
+    const char *trimmedUri;
+    const char *keyHostname = NULL;
+    const char *keyFTPuser = NULL;
+    const char *keyUri = NULL;
+    const char *root = NULL;
+    const char *admin = NULL;
+    const char *start;
+    int maxseg = 0;
+    const char *hostname = NULL;
+    p_docroot_t di = 0;
+#ifdef WITH_PHP
+    char *php_admin = NULL;
+    char *tmppath = NULL;
+#endif
+    apr_hash_index_t *hidx;
+    myvhost_cfg_t *conf =
+        (myvhost_cfg_t*) ap_get_module_config(r->server->module_config,
+                                              &myvhost_module);
+    myvhost_con_cfg_t *conn_conf =
+        (myvhost_con_cfg_t*) ap_get_module_config(r->connection->conn_config,
+                &myvhost_module);
+    core_server_config *scfg = ap_get_module_config(r->server->module_config, &core_module);
 
-    if (!arg || !strlen(arg)) {
-	return "mysql db user must be set";
-    }	
-    cfg->mysql_user = ap_pstrdup(cmd->pool, arg);
-    return NULL;
+    if (conf->label == NULL) {
+        return DECLINED;
+    }
+    if (r->proxyreq) {
+        return HTTP_FORBIDDEN;
+    }
+
+    hostname = ap_get_server_name(r);
+    if (!hostname || !strlen(hostname)) {
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                      "no hostname found in request");
+    } else if (ap_ind(hostname, '\'') != -1 || ap_ind(hostname, '\\') != -1) {
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
+                      "http_bad_request: invalid character(s) in hostname '%s'", hostname);
+        return HTTP_BAD_REQUEST;
+    }
+
+    if (r->uri == 0 || ((r->uri[0] != '/') && apr_strnatcmp(r->uri, "*") != 0)) {
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+                      "http_bad_request: Invalid URI in request %s", r->the_request);
+        return HTTP_BAD_REQUEST;
+    }
+    params = (const char **) apr_pcalloc(r->pool, conf->nparams * sizeof(char *));
+
+    /* Use the top-level request for FTPuser, IP, and Port */
+    while (mainreq->main) {
+        mainreq = mainreq->main;
+    }
+
+    /* Collect the parameters.  Make sure hostname and uri cannot surprise the
+     * database server with unexpected characaters (e.g. control characters)
+     * We (ab)use the ap_escape_logitem function to prevent this kind of trouble.
+     */
+    for (i = 0; i < conf->nparams; i++) {
+        switch (conf->params[i]) {
+
+        case HOSTNAME:
+            keyHostname = ap_escape_logitem(r->pool, hostname);
+            params[i] = keyHostname;
+            break;
+
+        case IP:
+            params[i] = mainreq->connection->local_ip;
+            break;
+
+        case PORT:
+            params[i] = apr_itoa(r->pool, mainreq->connection->local_addr->port);
+            break;
+
+        case FTPUSER:
+            keyFTPuser = ap_escape_logitem(r->pool, mainreq->user);
+            params[i] = keyFTPuser;
+            break;
+
+        case URI:
+            start = ap_escape_uri(r->pool, r->uri);
+            if ( (j = conf->urisegs[i]) && start) {
+                /* extract j leading URI segments */
+                const char *p = start;
+                while (j && *p)
+                    if (*++p == '/') --j;
+                params[i] = apr_pstrndup(r->pool, start, p - start);
+                if (conf->urisegs[i] > maxseg) {
+                    maxseg = conf->urisegs[i];
+                    keyUri = params[i];
+                }
+            } else {
+                /* use the whole URI */
+                params[i] = start;
+                maxseg = 10;
+                keyUri = start;
+            }
+        }
+    }
+
+    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                  "Hostname: %s, IP: %s, Port: %s, URI: %s",
+                  hostname,
+                  mainreq->connection->local_ip,
+                  apr_itoa(r->pool, mainreq->connection->local_addr->port),
+                  ap_escape_uri(r->pool, r->uri));
+
+    /* Create a new connection config if we don't already have one */
+    if (!conn_conf) {
+        conn_conf = apr_pcalloc(r->connection->pool, sizeof(myvhost_con_cfg_t));
+#ifdef WITH_PHP
+        conn_conf->php_ini = apr_hash_make(r->connection->pool);
+#endif
+        conn_conf->envs = apr_hash_make(r->connection->pool);
+        ap_set_module_config(r->connection->conn_config, &myvhost_module, conn_conf);
+    }
+
+    /* Can we re-use a previous result from our conn_conf?
+     * Only a change in the hostname, FTP user name, or the part of the URI that we
+     * are actually using requires a new query for this connection.
+     *
+     * Note that if a conn_conf->root exists we are within the same connection,
+     * so this request is guaranteed to be to the same IP address.
+     */
+    if (!conn_conf->root
+            || (keyHostname && (!conn_conf->hostname || apr_strnatcmp(conn_conf->hostname, keyHostname)))
+            || (keyFTPuser &&  (!conn_conf->ftp_user  || apr_strnatcmp(conn_conf->ftp_user, keyFTPuser)))
+            || (keyUri &&      (!conn_conf->uri      || apr_strnatcmp(conn_conf->uri, keyUri)))
+       ) {
+        /* YES - we do need to execute a query */
+        if ((dbd = dbd_acquire_fn(r)) == NULL) {
+            ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r,
+                          "Error acquiring connection to database");
+            return HTTP_INTERNAL_SERVER_ERROR;
+        }
+
+        if ((stmt = apr_hash_get(dbd->prepared, conf->label,
+                                 APR_HASH_KEY_STRING)) == NULL) {
+            ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r,
+                          "Unable to retrieve prepared statement %s",
+                          conf->label);
+            return HTTP_INTERNAL_SERVER_ERROR;
+        }
+
+        /* conf->sql might just be a label created with DBDPrepareSQL, not SQL */
+        if (isSimpleName(conf->sql) && (prestmt = apr_hash_get(dbd->prepared, conf->sql, APR_HASH_KEY_STRING))) {
+            stmt = prestmt;
+        }
+
+        rv = apr_dbd_pselect(dbd->driver, r->pool, dbd->handle, &res, stmt,
+                             0, conf->nparams, params);
+        if (rv != APR_SUCCESS) {
+            ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r,
+                          "Unable to execute SQL statement: %s",
+                          apr_dbd_error(dbd->driver, dbd->handle, rv));
+            return HTTP_INTERNAL_SERVER_ERROR;
+        }
+
+        rows = apr_dbd_num_tuples(dbd->driver, res);
+        if (rows > 1) {
+            ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r,
+                          "Returned multiple (%d) rows (stmt: %s)",
+                          rows, conf->label );
+            /* Flush the multiple rows and return an error */
+            while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1)) {
+                continue;
+            }
+            return HTTP_INTERNAL_SERVER_ERROR;
+        }
+
+        if (!rows) {
+            /* a vhost was not found by the SQL query */
+            /* DEBUG loglevel */
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                          "Executed: (stmt: %s) returned %d rows, DocumentRoot unset",
+                          conf->label, rows);
+            return DECLINED;
+        }
+
+        cols = apr_dbd_num_cols(dbd->driver, res);
+        if (!cols) {
+            ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r,
+                          "SQL statement returned no columns");
+            return HTTP_INTERNAL_SERVER_ERROR;
+        }
+
+        if (apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1) != APR_SUCCESS) {
+            if (rows < 0) {
+                /* Some drivers cannot report the number of rows and return rows = -1.
+                 * In this case, we didn't learn there were no rows until now.
+                 */
+                return DECLINED;
+            }
+            ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r,
+                          "Unable to fetch 1st row of %d rows (stmt %s): %s",
+                          rows, conf->label, apr_dbd_error(dbd->driver, dbd->handle, rv));
+            return HTTP_INTERNAL_SERVER_ERROR;
+        }
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                      "Successfully executed query: (stmt: %s) returned %d row(s) %d column(s), key: [%s:%s:%s]",
+                      conf->label, rows, cols, keyHostname, keyFTPuser, keyUri);
+
+        apr_hash_clear(conn_conf->envs);
+
+        for (j = 0; j < cols ; j++) {
+            const char *name = apr_dbd_get_name(dbd->driver, res, j);
+            const char *value = apr_dbd_get_entry(dbd->driver, row, j);
+
+            if (!name || !strlen(name)) {
+                continue;
+            }
+
+            if (!apr_strnatcasecmp(name, "DocumentRoot")) {
+                if (!value || !strlen(value)) {
+                    /* fetch until -1 return to make sure results set gets cleaned up */
+                    while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1)) {
+                        continue;
+                    }
+                    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                                  "declined: query (stmt: %s) for key [%s:%s:%s] have not found DocumentRoot",
+                                  conf->label, keyHostname, keyFTPuser, keyUri);
+                    return DECLINED;
+                }
+                root = apr_pstrdup(r->pool, value);
+                ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                              "Successfully executed query: (stmt: %s) returned %d row(s) %d column(s), for key: [%s:%s:%s] DocumentRoot value is: %s",
+                              conf->label, rows, cols, keyHostname, keyFTPuser, keyUri, root);
+            } else if (!apr_strnatcasecmp(name, "ServerAdmin")) {
+                if (!value || !strlen(value)) {
+                    admin = apr_pstrcat(r->pool, "webmaster@", hostname, NULL);
+                } else {
+                    admin = apr_pstrdup(r->pool, value);
+
+                }
+#ifdef WITH_PHP
+            } else if (!apr_strnatcasecmp(name, "php_admin")) {
+                char *last, *line;
+
+                if (!value || !strlen(value)) {
+                    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                                  "query (stmt: %s) for key [%s:%s:%s] returned empty value for php_admin",
+                                  conf->label, keyHostname, keyFTPuser, keyUri);
+                    continue;
+                }
+
+                php_admin = apr_pstrdup(r->pool, value);
+
+                apr_hash_clear(conn_conf->php_ini);
+
+                ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                              "query (stmt: %s) for key [%s:%s:%s] for php_admin returned [%s]",
+                              conf->label, keyHostname, keyFTPuser, keyUri, php_admin);
+                for (line = apr_strtok(php_admin, ";", &last); line != NULL; line = apr_strtok (NULL, ";", &last)) {
+                    char *php_name, *php_value;
+                    int idx;
+
+                    idx = ap_ind(line, '=');
+
+                    if (idx > 0) {
+                        line[idx] = '\0';
+                        php_name = line;
+                        php_value = line + idx + 1; /* it's safe */
+                        apr_hash_set(conn_conf->php_ini,
+                                     apr_pstrdup(r->connection->pool, php_name), APR_HASH_KEY_STRING,
+                                     apr_pstrdup(r->connection->pool, php_value));
+                    }
+
+                }
+#endif
+            } else { /* save any extra columns to become env variables */
+                int k;
+                char str[MAX_ENV_NAME];
+
+                apr_cpystrn(str, name, MAX_ENV_NAME);
+                /* no bogus chars allowed in env var names - substitute underscores */
+                for (k = 0; str[k]; k++) {
+                    if (!apr_isalnum(str[k])) {
+                        str[k] = '_';
+                    }
+                }
+                apr_hash_set(conn_conf->envs,
+                             apr_pstrdup(r->connection->pool, str), APR_HASH_KEY_STRING,
+                             apr_pstrdup(r->connection->pool, value));
+            }
+        }
+
+        conn_conf->hostname = keyHostname ? apr_pstrdup(r->connection->pool, keyHostname) : NULL;
+        conn_conf->ftp_user = keyFTPuser ? apr_pstrdup(r->connection->pool, keyFTPuser) : NULL;
+        conn_conf->uri = keyUri ? apr_pstrdup(r->connection->pool, keyUri) : NULL;
+        conn_conf->root = root ? apr_pstrdup(r->connection->pool, root) : NULL;
+        conn_conf->admin = admin ? apr_pstrdup(r->connection->pool, admin) : NULL;
+
+        /* fetch until -1 return to make sure results set gets cleaned up */
+        while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1)) {
+            continue;
+        }
+    } else  {
+        /* NO - we do not need to execute a query. Use the root we saved in conn_conf */
+        root = conn_conf->root;
+        admin = conn_conf->admin;
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                      "Using previous connection query (stmt: %s) key: [%s:%s:%s] for DocumentRoot [%s] and ServerAdmin [%s]",
+                      conf->label, keyHostname, keyFTPuser, keyUri, root, admin);
+
+    }
+
+    if (!root) {
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
+                      "declined: DocumentRoot is empty");
+        return DECLINED;
+    }
+
+    if (!ap_is_directory(r->pool, root)) {
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
+                      "declined: DocumentRoot [%s] is not dir at all", root);
+        return DECLINED;
+    }
+
+    trimmedUri = r->uri;
+    while (*trimmedUri == '/') {
+        ++trimmedUri;
+    }
+
+    if (apr_filepath_merge(&r->filename, root, trimmedUri,
+                           APR_FILEPATH_TRUENAME | APR_FILEPATH_SECUREROOT,
+                           r->pool)) {
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, rv, r,
+                      "forbidden: cannot map [%s] to file with DocumentRoot [%s]",
+                      r->the_request, root);
+        return HTTP_FORBIDDEN;
+    }
+
+    /* got a good doc root - set it and save the result for this conn */
+    r->canonical_filename = r->filename;
+    conn_conf->root = apr_pstrdup(r->connection->pool, root);
+
+    /* set env variables - unset them if NULL or zero-length value */
+    for (hidx = apr_hash_first(r->pool, conn_conf->envs); hidx ; hidx = apr_hash_next(hidx)) {
+        const char *name ;
+        const char *val;
+        apr_hash_this(hidx, (void *)&name, NULL, (void *)&val);
+        if (val && *val) {
+            apr_table_set(r->subprocess_env, name, val);
+        } else {
+            apr_table_unset(r->subprocess_env, name);
+        }
+    }
+
+    di = apr_palloc(r->pool, sizeof *di);
+    di->docroot = &scfg->ap_document_root;
+    di->original = scfg->ap_document_root;
+    apr_pool_cleanup_register(r->pool, di, restore_docroot, restore_docroot);
+    scfg->ap_document_root = root;
+    r->server->is_virtual = 1;
+    r->server->server_admin = admin;
+
+#ifdef WITH_PHP
+    /* set php settings */
+    for (hidx = apr_hash_first(r->pool, conn_conf->php_ini); hidx; hidx = apr_hash_next(hidx)) {
+        const char *name ;
+        const char *val;
+        apr_hash_this(hidx, (void *)&name, NULL, (void *)&val);
+        if (php_ini_set(name, val) < 0) {
+            ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
+                          "zend_alter_ini_entry() set [%s] to [%s] failed", name, val);
+        }
+    }
+
+    apr_table_setn(r->subprocess_env, "PHP_DOCUMENT_ROOT", root);
+    if (php_ini_set("open_basedir", root) < 0) {
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'open_basedir' failed");
+    }
+
+    if (php_ini_set("safe_mode", "1") < 0) {
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'safe_mode' failed");
+    }
+
+    if (apr_filepath_merge(&tmppath, root, ".tmp", APR_FILEPATH_NATIVE, r->pool) == APR_SUCCESS &&
+            ap_is_directory(r->pool, tmppath))
+    {
+        if (php_ini_set("upload_tmp_dir", tmppath) < 0) {
+            ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'upload_tmp_dir' failed");
+        }
+    }
+#endif /* WITH_PHP */
+
+    return (rv == APR_SUCCESS) ? OK : HTTP_BAD_REQUEST;
 }
 
-static const char *set_pass(cmd_parms *cmd, void *__unused__, char *arg)
+/* process DBDocRoot directive */
+static const char *setVhostQuery(cmd_parms *cmd, void* mconfig __unused,
+                                 const char *sql, const char *paramName)
 {
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
-					      &myvhost_module);
+    static long label_num = 0;
+    myvhost_cfg_t *conf =
+        (myvhost_cfg_t *) ap_get_module_config(cmd->server->module_config,
+                                               &myvhost_module);
+    if (!dbd_prepare_fn || !dbd_acquire_fn)
+        return "mod_dbd must be enabled to use mod_vhost_dbd";
 
-    if (!arg || !strlen(arg)) {
-	return "mysql db passwd must be set";
-    }	
-    cfg->mysql_pass = ap_pstrdup(cmd->pool, arg);
-    return NULL;
-}
+    if (conf->nparams >= MAX_PARAMS) {
+        return "Too many parameters";
+    }
 
-static const char *set_dbname(cmd_parms *cmd, void *__unused__, char *arg)
-{
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
-					      &myvhost_module);
+    if (!apr_strnatcasecmp(paramName, "hostname")) {
+        conf->params[conf->nparams] = HOSTNAME;
+    } else if (!apr_strnatcasecmp(paramName, "ip")) {
+        conf->params[conf->nparams] = IP;
+    } else if (!apr_strnatcasecmp(paramName, "port")) {
+        conf->params[conf->nparams] = PORT;
+        /* FTPUSER is only available for mod_ftp - currently un-doc'd */
+    } else if (!apr_strnatcasecmp(paramName, "ftpuser")
+               && ap_find_linked_module("mod_ftp.c")) {
+        conf->params[conf->nparams] = FTPUSER;
+    } else {
+        char *uricmd = apr_pstrndup(cmd->pool, paramName, 3);
+        if (!apr_strnatcasecmp(uricmd, "uri") &&
+                (paramName[3]=='\0' ||
+                 (apr_isdigit(paramName[3]) && paramName[4]=='\0')
+                )
+           )
+        {
+            conf->params[conf->nparams] = URI;
+            conf->urisegs[conf->nparams] = atoi(paramName+3);
+        } else {
+            return apr_pstrcat(cmd->pool,
+                               "invalid parameter name: ",
+                               paramName, NULL);
+        }
+    }
+    ++conf->nparams;
 
-    if (!arg || !strlen(arg)) {
-	return "mysql db name must be set";
-    }	
-    cfg->mysql_dbname = ap_pstrdup(cmd->pool, arg);
-    return NULL;
-}
+    if (!conf->label) {
+        conf->label = apr_pstrcat(cmd->pool, "myvhost_dbd_",
+                                  apr_ltoa(cmd->pool, ++label_num), NULL);
+        dbd_prepare_fn(cmd->server, sql, conf->label);
+        conf->sql = sql;
 
-static const char *set_socket(cmd_parms *cmd, void *__unused__, char *arg)
-{
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config,
-					      &myvhost_module);
-
-    cfg->mysql_unixsock = 0;
-    cfg->mysql_inetsock = 0;
-    if (arg && strlen(arg) > 0) {
-	if (arg[0] == '/') {
-	    cfg->mysql_unixsock = ap_pstrdup(cmd->pool, arg);
-	} else {
-	    cfg->mysql_inetsock = ap_strtol(arg, 0, 10);
-	}
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, cmd->server,
+                     "Prepared query (stmt: %s) from: %s",
+                     conf->label, sql);
     }
     return NULL;
 }
 
-static const char *set_myquery(cmd_parms *cmd, void *__unused__, char *arg)
+static void *merge_config_server(apr_pool_t *p __unused, void *parentconf,
+                                 void *newconf)
 {
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
+    myvhost_cfg_t *base = (myvhost_cfg_t *) parentconf;
+    myvhost_cfg_t *add = (myvhost_cfg_t *) newconf;
 
-    if (!arg || !strlen(arg)) {
-	return "mysql query must be set";
-    }	
-    cfg->mysql_vhost_query = ap_pstrdup(cmd->pool, arg);
-    return NULL;
+    return (add->label) ? add : base;
 }
 
-static const char *set_module_onoff(cmd_parms *cmd, void *__unused__, int flag)
+static void *config_server(apr_pool_t *p, server_rec *s __unused)
 {
-    myvhost_cfg_t *cfg = (myvhost_cfg_t *)ap_get_module_config(cmd->server->module_config, &myvhost_module);
-
-    cfg->myvhost_enabled = (flag ? 1 : 0);
-    return NULL;
+    myvhost_cfg_t *conf = apr_pcalloc(p, sizeof(myvhost_cfg_t));
+    if (!dbd_prepare_fn) {
+        dbd_prepare_fn =
+            APR_RETRIEVE_OPTIONAL_FN(ap_dbd_prepare);
+        dbd_acquire_fn =
+            APR_RETRIEVE_OPTIONAL_FN(ap_dbd_acquire);
+    }
+    return conf;
 }
 
-static const char *set_default_root(cmd_parms *cmd, void *__unused__, char *arg)
+static void register_hooks(apr_pool_t *pool __unused)
 {
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
+    static const char * const translate_pre[] = { "mod_alias.c", NULL };
 
-    if (!arg || !strlen(arg)) {
-	return "default_root must be set";
-    }	
-    if (!ap_is_directory(arg)) {
-	return "default_root must be a directory";
-    }	
-    cfg->default_root = ap_pstrdup(cmd->pool, arg);
-    return NULL;
+    ap_hook_translate_name(myvhost_translate_name, translate_pre, NULL, APR_HOOK_MIDDLE);
 }
 
-static const char *set_default_host(cmd_parms *cmd, void *__unused__, char *arg)
+static const command_rec cmds[] =
 {
-    myvhost_cfg_t *cfg = ap_get_module_config(cmd->server->module_config, &myvhost_module);
-
-    if (!arg || !strlen(arg)) {
-	return "default_host must be set";
-    }	
-    cfg->default_host = ap_pstrdup(cmd->pool, arg);
-    return NULL;
-}
-
-#ifdef WITH_CACHE
-static const char *set_cache_onoff(cmd_parms *cmd, void *__unused__, int flag)
-{
-    myvhost_cfg_t *cfg = (myvhost_cfg_t *)ap_get_module_config(cmd->server->module_config, &myvhost_module);
-
-    cfg->cache_enabled = (flag ? 1 : 0);
-    return NULL;
-}
-#endif
-
-static const command_rec myvhost_cmds[] = {
-    {"MyVhostOn", set_module_onoff, NULL, RSRC_CONF, FLAG, "Turn on Apache MySQL Vuser on this server"},
-    {"MyVhostDefaultHost", set_default_host, NULL, RSRC_CONF, TAKE1, "Set default hostname"},
-    {"MyVhostDefaultRoot", set_default_root, NULL, RSRC_CONF, TAKE1, "Set default root directory"},
-    {"MyVhostDbHost", set_host, NULL, RSRC_CONF, TAKE1, "Set hostname for MySQL server"},
-    {"MyVhostDbName", set_dbname, NULL, RSRC_CONF, TAKE1, "Set database to connect"},
-    {"MyVhostDbUser", set_user, NULL, RSRC_CONF, TAKE1, "Set username for database"},
-    {"MyVhostDbPass", set_pass, NULL, RSRC_CONF, TAKE1, "Set password for database"},
-    {"MyVhostDbSocket", set_socket, NULL, RSRC_CONF, TAKE1, "Set MySQL socket to use"},
-    {"MyVhostQuery", set_myquery, NULL, RSRC_CONF, TAKE1, "The SELECT query, returns homedir and extra php config"},
-#ifdef WITH_CACHE
-    {"MyVhostCacheOn", set_cache_onoff, NULL, RSRC_CONF, FLAG, "Turn on internal caching"},
-#endif
+    AP_INIT_ITERATE2("DBDocRoot", setVhostQuery, NULL, RSRC_CONF,
+    "DBDocRoot  QUERY  [HOSTNAME|IP|PORT|URI[n]]..."),
     {NULL}
 };
 
-module MODULE_VAR_EXPORT myvhost_module =
+module AP_MODULE_DECLARE_DATA myvhost_module =
 {
-    STANDARD_MODULE_STUFF,
-    NULL,			/* initializer */
-    NULL,			/* dir config creater */
-    NULL,			/* dir merger - default is to override */
-    myvhost_create_server_config,	/* server config */
-    NULL, /* myvhost_merge_server_config merge server configs */
-    myvhost_cmds,		/* command table */
-    NULL,			/* handlers */
-    myvhost_translate,		/* filename translation */
-    NULL,			/* check_user_id */
-    NULL,			/* check auth */
-    NULL,			/* check access */
-    NULL,			/* type_checker */
-    NULL,			/* fixups */
-    NULL,			/* logger */
-    NULL,			/* header parser */
-    myvhost_child_init,		/* child_init */
-    myvhost_child_exit,		/* child_exit */
-    NULL,			/* post read-request */
-#ifdef EAPI
-    NULL,			/* EAPI: add_module */
-    NULL,			/* EAPI: remove_module */
-    NULL,			/* EAPI: rewrite_command */
-    NULL			/* EAPI: new_connection */
-#endif
+    STANDARD20_MODULE_STUFF,
+    NULL,                       /* create per-dir config */
+    NULL,                       /* merge per-dir config */
+    config_server,              /* server config */
+    merge_config_server,        /* merge server config */
+    cmds,                       /* command apr_table_t */
+    register_hooks              /* register hooks */
 };
