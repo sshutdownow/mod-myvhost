@@ -45,6 +45,36 @@ param_names_t paramNames;
 static APR_OPTIONAL_FN_TYPE(ap_dbd_prepare) *dbd_prepare_fn = NULL;
 static APR_OPTIONAL_FN_TYPE(ap_dbd_acquire) *dbd_acquire_fn = NULL;
 
+
+
+static int myvhost_module_init(apr_pool_t *p __unused, apr_pool_t *plog __unused, apr_pool_t *ptemp __unused, server_rec *s)
+{
+#if defined(__linux__)
+    if (prctl(PR_SET_KEEPCAPS, 1) < 0) {
+        ap_log_error(APLOG_MARK, APLOG_EMERG, errno, s, "CRITICAL ERROR prctl failed");
+        return APR_FROM_OS_ERROR(errno);
+    }
+#endif
+    return APR_SUCCESS;
+}
+
+static void myvhost_child_init(apr_pool_t *p __unused, server_rec *s)
+{
+#if defined(__linux__)
+    cap_t cap = cap_init();
+    static cap_value_t capval[3] = { CAP_SETUID, CAP_SETGID, CAP_DAC_OVERRIDE };
+
+    if (cap_set_flag(cap, CAP_PERMITTED, sizeof(capval)/sizeof(capval[0]), capval, CAP_SET) < 0) {
+        ap_log_error(APLOG_MARK, APLOG_EMERG, errno, s, "CRITICAL ERROR cap_set_flag failed");
+    }
+    if (cap_set_proc(cap) < 0) {
+        ap_log_error(APLOG_MARK, APLOG_EMERG, errno, s, "CRITICAL ERROR cap_set_proc failed");
+    }
+    cap_free(cap);
+#endif
+}
+
+
 /* Ancillary functions */
 
 /* check if a string could be a label name */
@@ -357,8 +387,8 @@ static int myvhost_translate_name(request_rec *r)
                     int idx;
 
                     idx = ap_ind(line, '=');
-
                     if (idx > 0) {
+                        /* char *ap_getword_nulls(pool *p, const char **line, char stop); */
                         line[idx] = '\0';
                         php_name = line;
                         php_value = line + idx + 1; /* it's safe */
@@ -557,12 +587,16 @@ static void *merge_config_server(apr_pool_t *p __unused, void *parentconf,
 static void *config_server(apr_pool_t *p, server_rec *s __unused)
 {
     myvhost_cfg_t *conf = apr_pcalloc(p, sizeof(myvhost_cfg_t));
-    if (!dbd_prepare_fn) {
+
+    AP_DEBUG_ASSERT(conf);
+
+    if (!dbd_prepare_fn || !dbd_acquire_fn) {
         dbd_prepare_fn =
             APR_RETRIEVE_OPTIONAL_FN(ap_dbd_prepare);
         dbd_acquire_fn =
             APR_RETRIEVE_OPTIONAL_FN(ap_dbd_acquire);
     }
+
     return conf;
 }
 
@@ -570,6 +604,8 @@ static void register_hooks(apr_pool_t *pool __unused)
 {
     static const char * const translate_pre[] = { "mod_alias.c", NULL };
 
+    ap_hook_post_config(myvhost_module_init, NULL, NULL, APR_HOOK_FIRST);
+    ap_hook_child_init(myvhost_child_init, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_translate_name(myvhost_translate_name, translate_pre, NULL, APR_HOOK_MIDDLE);
 }
 

@@ -48,6 +48,10 @@ typedef struct {
     apr_hash_t *php_ini;
 #endif
     apr_hash_t *envs;
+#ifdef WITH_UID_GID
+    const uid_t uid;
+    const gid_t gid;
+#endif
 } myvhost_con_cfg_t;
 
 /* parameter codes */

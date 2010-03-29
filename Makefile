@@ -11,15 +11,21 @@ APXS = apxs
 SRCS = mod_myvhost.c mod_myvhost_cache.c
 OBJS = mod_myvhost.o mod_myvhost_cache.o
 
+UNAME := $(shell uname)
+
 RM = rm -rf
 LN = ln -sf
 CP = cp -f
 
 CFLAGS = -Wc,-W -Wc,-Wall
 CFLAGS+= -DWITH_PHP
-#CFLAGS+= -DWITH_PHP -DWITH_UID_GID -DWITH_CACHE
+#CFLAGS+=  -DWITH_CACHE
 CFLAGS+= -DDEBUG
-LDFLAGS = 
+
+ifeq ($(UNAME), Linux)
+CFLAGS+= -DWITH_UID_GID
+LDFLAGS =  -l cap
+endif
 
 default: all
 
