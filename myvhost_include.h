@@ -26,6 +26,7 @@
 #if defined(__linux__)
 #include <sys/prctl.h>
 #include <sys/capability.h>
+#include <unistd.h>
 #endif
 
 #include "apr_strings.h"
@@ -40,6 +41,7 @@
 #include "http_core.h"
 #include "http_log.h"
 #include "mod_dbd.h"
+#include "mpm_common.h"
 
 
 #if !defined(__unused)
@@ -51,5 +53,6 @@
 #endif
 
 #endif /* __unused */
+
 
 #endif /* __MYVHOST_INCLUDE_H__ */

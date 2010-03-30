@@ -46,9 +46,16 @@ static APR_OPTIONAL_FN_TYPE(ap_dbd_prepare) *dbd_prepare_fn = NULL;
 static APR_OPTIONAL_FN_TYPE(ap_dbd_acquire) *dbd_acquire_fn = NULL;
 
 
-
 static int myvhost_module_init(apr_pool_t *p __unused, apr_pool_t *plog __unused, apr_pool_t *ptemp __unused, server_rec *s)
 {
+    if (!dbd_prepare_fn || !dbd_acquire_fn) {
+        dbd_prepare_fn = APR_RETRIEVE_OPTIONAL_FN(ap_dbd_prepare);
+        if (!dbd_prepare_fn) {
+            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_EMERG, 0, s, "CRITICAL ERROR mod_dbd must loaded");
+            return HTTP_INTERNAL_SERVER_ERROR;
+        }
+        dbd_acquire_fn = APR_RETRIEVE_OPTIONAL_FN(ap_dbd_acquire);
+    }
 #if defined(__linux__)
     if (prctl(PR_SET_KEEPCAPS, 1) < 0) {
         ap_log_error(APLOG_MARK, APLOG_EMERG, errno, s, "CRITICAL ERROR prctl failed");
@@ -62,9 +69,10 @@ static void myvhost_child_init(apr_pool_t *p __unused, server_rec *s)
 {
 #if defined(__linux__)
     cap_t cap = cap_init();
-    static cap_value_t capval[3] = { CAP_SETUID, CAP_SETGID, CAP_DAC_OVERRIDE };
 
-    if (cap_set_flag(cap, CAP_PERMITTED, sizeof(capval)/sizeof(capval[0]), capval, CAP_SET) < 0) {
+    if (cap_set_flag(cap, CAP_PERMITTED, 3, (cap_value_t[]) {
+    CAP_SETUID, CAP_SETGID, CAP_DAC_OVERRIDE
+}, CAP_SET) < 0) {
         ap_log_error(APLOG_MARK, APLOG_EMERG, errno, s, "CRITICAL ERROR cap_set_flag failed");
     }
     if (cap_set_proc(cap) < 0) {
@@ -106,15 +114,45 @@ static APR_INLINE int php_ini_set(char* name, char* value)
  */
 
 typedef struct  {
-    const char **docroot;
-    const char *original;
-} docroot_t, *p_docroot_t;
+    const char **original_ptr;
+    const char  *original_val;
+} save_ptr_t, *p_save_ptr_t;
 
 /* docroot cleanup handler */
-static apr_status_t restore_docroot(void *data)
+static apr_status_t restore_ptr(void *data)
 {
-    p_docroot_t di = (p_docroot_t)data;
-    *di->docroot  = di->original;
+    p_save_ptr_t di = (p_save_ptr_t)data;
+    *di->original_ptr = di->original_val;
+    return APR_SUCCESS;
+}
+
+static apr_status_t restore_uid_gid(void *data __unused)
+{
+#if defined(__linux__)
+    cap_t cap = cap_get_proc();
+
+    cap_set_flag(cap, CAP_EFFECTIVE, 2, (cap_value_t[]) {
+        CAP_SETUID, CAP_SETGID
+    }, CAP_SET);
+    if (cap_set_proc(cap) < 0) {
+//        ap_log_error (APLOG_MARK, APLOG_ERR, 0, NULL, "%s CRITICAL ERROR ruid_suidback:cap_set_proc failed before setuid", MODULE);
+    }
+    cap_free(cap);
+
+    setgroups(0, NULL);
+    setgid(unixd_config.group_id);
+    setuid(unixd_config.user_id);
+
+    cap = cap_get_proc();
+    cap_set_flag(cap, CAP_EFFECTIVE, 2/*3*/, (cap_value_t[]) {
+        CAP_SETUID, CAP_SETGID
+    }, CAP_CLEAR);
+
+    if (cap_set_proc(cap) < 0) {
+//        ap_log_error (APLOG_MARK, APLOG_ERR, 0, NULL, "%s CRITICAL ERROR ruid_suidback:cap_set_proc failed after setuid", MODULE);
+    }
+    cap_free(cap);
+#endif
     return APR_SUCCESS;
 }
 
@@ -141,10 +179,15 @@ static int myvhost_translate_name(request_rec *r)
     const char *start;
     int maxseg = 0;
     const char *hostname = NULL;
-    p_docroot_t di = 0;
+    p_save_ptr_t di = 0;
 #ifdef WITH_PHP
     char *php_admin = NULL;
     char *tmppath = NULL;
+#endif
+#ifdef WITH_UID_GID
+    long uid = 0, gid = 0;
+    apr_uid_t cur_uid;
+    apr_gid_t cur_gid;
 #endif
     apr_hash_index_t *hidx;
     myvhost_cfg_t *conf =
@@ -282,7 +325,7 @@ static int myvhost_translate_name(request_rec *r)
         rv = apr_dbd_pselect(dbd->driver, r->pool, dbd->handle, &res, stmt,
                              0, conf->nparams, params);
         if (rv != APR_SUCCESS) {
-            ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r,
+            ap_log_rerror(APLOG_MARK, APLOG_CRIT, rv, r,
                           "Unable to execute SQL statement: %s",
                           apr_dbd_error(dbd->driver, dbd->handle, rv));
             return HTTP_INTERNAL_SERVER_ERROR;
@@ -398,7 +441,35 @@ static int myvhost_translate_name(request_rec *r)
                     }
 
                 }
-#endif
+#endif /* WITH_PHP */
+#ifdef WITH_UID_GID
+            } else if (!apr_strnatcasecmp(name, "User")) {
+                char *end;
+                uid = strtol(value, &end, 10);
+                if ((errno == ERANGE && (uid == LONG_MAX || uid == LONG_MIN)) ||
+                        (errno != 0 && uid == 0) || value == end) {
+                    /* fetch until -1 return to make sure results set gets cleaned up */
+                    while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1)) {
+                        continue;
+                    }
+                    ap_log_rerror(APLOG_MARK, APLOG_CRIT, errno, r,
+                                  "declined: can't get User ID for Server - strtol on [%s] failed", value);
+                    return DECLINED;
+                }
+            } else if (!apr_strnatcasecmp(name, "Group")) {
+                char *end;
+                gid = strtol(value, &end, 10);
+                if ((errno == ERANGE && (gid == LONG_MAX || gid == LONG_MIN)) ||
+                        (errno != 0 && gid == 0) || value == end) {
+                    /* fetch until -1 return to make sure results set gets cleaned up */
+                    while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1)) {
+                        continue;
+                    }
+                    ap_log_rerror(APLOG_MARK, APLOG_CRIT, errno, r,
+                                  "declined: can't get Group ID for Server - strtol on [%s] failed", value);
+                    return DECLINED;
+                }
+#endif /* WITH_UID_GID */
             } else { /* save any extra columns to become env variables */
                 int k;
                 char str[MAX_ENV_NAME];
@@ -430,10 +501,17 @@ static int myvhost_translate_name(request_rec *r)
         /* NO - we do not need to execute a query. Use the root we saved in conn_conf */
         root = conn_conf->root;
         admin = conn_conf->admin;
+#ifdef WITH_UID_GID
+        uid = conn_conf->uid;
+        gid = conn_conf->gid;
         ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
-                      "Using previous connection query (stmt: %s) key: [%s:%s:%s] for DocumentRoot [%s] and ServerAdmin [%s]",
+                      "Using previous connection query (stmt: %s) key: [%s:%s:%s] - DocumentRoot: [%s] ServerAdmin: [%s] User: [%ld] Group: [%ld]",
+                      conf->label, keyHostname, keyFTPuser, keyUri, root, admin, uid, gid);
+#else
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
+                      "Using previous connection query (stmt: %s) key: [%s:%s:%s] - DocumentRoot: [%s] ServerAdmin: [%s]",
                       conf->label, keyHostname, keyFTPuser, keyUri, root, admin);
-
+#endif
     }
 
     if (!root) {
@@ -468,8 +546,8 @@ static int myvhost_translate_name(request_rec *r)
 
     /* set env variables - unset them if NULL or zero-length value */
     for (hidx = apr_hash_first(r->pool, conn_conf->envs); hidx ; hidx = apr_hash_next(hidx)) {
-        const char *name ;
-        const char *val;
+        const char *name, *val;
+
         apr_hash_this(hidx, (void *)&name, NULL, (void *)&val);
         if (val && *val) {
             apr_table_set(r->subprocess_env, name, val);
@@ -479,18 +557,24 @@ static int myvhost_translate_name(request_rec *r)
     }
 
     di = apr_palloc(r->pool, sizeof *di);
-    di->docroot = &scfg->ap_document_root;
-    di->original = scfg->ap_document_root;
-    apr_pool_cleanup_register(r->pool, di, restore_docroot, restore_docroot);
+    di->original_ptr = &scfg->ap_document_root;
+    di->original_val = scfg->ap_document_root;
+    apr_pool_cleanup_register(r->pool, di, restore_ptr, restore_ptr);
     scfg->ap_document_root = root;
-    r->server->is_virtual = 1;
+
+    di = apr_palloc(r->pool, sizeof *di);
+    di->original_ptr = &r->server->server_admin;
+    di->original_val = r->server->server_admin;
+    apr_pool_cleanup_register(r->pool, di, restore_ptr, restore_ptr);
     r->server->server_admin = admin;
+
+    r->server->is_virtual = 1;
 
 #ifdef WITH_PHP
     /* set php settings */
     for (hidx = apr_hash_first(r->pool, conn_conf->php_ini); hidx; hidx = apr_hash_next(hidx)) {
-        const char *name ;
-        const char *val;
+        const char *name, *val ;
+
         apr_hash_this(hidx, (void *)&name, NULL, (void *)&val);
         if (php_ini_set(name, val) < 0) {
             ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
@@ -500,22 +584,29 @@ static int myvhost_translate_name(request_rec *r)
 
     apr_table_setn(r->subprocess_env, "PHP_DOCUMENT_ROOT", root);
     if (php_ini_set("open_basedir", root) < 0) {
-        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'open_basedir' failed");
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set [open_basedir] failed");
     }
 
     if (php_ini_set("safe_mode", "1") < 0) {
-        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'safe_mode' failed");
+        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set [safe_mode] failed");
     }
 
     if (apr_filepath_merge(&tmppath, root, ".tmp", APR_FILEPATH_NATIVE, r->pool) == APR_SUCCESS &&
             ap_is_directory(r->pool, tmppath))
     {
         if (php_ini_set("upload_tmp_dir", tmppath) < 0) {
-            ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'upload_tmp_dir' failed");
+            ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set [upload_tmp_dir] failed");
         }
     }
 #endif /* WITH_PHP */
-
+#ifdef WITH_UID_GID
+#if defined(__linux__)
+    if (apr_uid_current(&cur_uid, &cur_gid, r->pool) == APR_SUCCESS &&
+            unixd_config.user_id == cur_uid && unixd_config.group_id == cur_gid) {
+        apr_pool_cleanup_register(r->pool, NULL, restore_uid_gid, restore_uid_gid);
+    }
+#endif /* __linux__ */
+#endif /* WITH_UID_GID */
     return (rv == APR_SUCCESS) ? OK : HTTP_BAD_REQUEST;
 }
 
@@ -553,7 +644,7 @@ static const char *setVhostQuery(cmd_parms *cmd, void* mconfig __unused,
            )
         {
             conf->params[conf->nparams] = URI;
-            conf->urisegs[conf->nparams] = atoi(paramName+3);
+            conf->urisegs[conf->nparams] = strtol(paramName+3, NULL, 10);
         } else {
             return apr_pstrcat(cmd->pool,
                                "invalid parameter name: ",
@@ -590,12 +681,6 @@ static void *config_server(apr_pool_t *p, server_rec *s __unused)
 
     AP_DEBUG_ASSERT(conf);
 
-    if (!dbd_prepare_fn || !dbd_acquire_fn) {
-        dbd_prepare_fn =
-            APR_RETRIEVE_OPTIONAL_FN(ap_dbd_prepare);
-        dbd_acquire_fn =
-            APR_RETRIEVE_OPTIONAL_FN(ap_dbd_acquire);
-    }
 
     return conf;
 }
