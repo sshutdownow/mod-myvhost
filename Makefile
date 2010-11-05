@@ -7,7 +7,7 @@
 NAME = myvhost
 APACHE_MODULE = mod_myvhost.so
 MODULE_LA = mod_myvhost.la
-APXS = apxs
+APXS = apxs2
 SRCS = mod_myvhost.c mod_myvhost_cache.c escape_sql.c
 OBJS = mod_myvhost.o mod_myvhost_cache.o escape_sql.o
 #SRCS = mod_myvhost.c mod_myvhost_cache.c mod_myvhost_php.c escape_sql.c
@@ -24,7 +24,7 @@ CFLAGS = -Wc,-W -Wc,-Wall $(MYSQLCPPFLAGS)
 CFLAGS+= -DWITH_PHP -DWITH_CACHE
 #CFLAGS+= -DWITH_PHP -DWITH_UID_GID -DWITH_CACHE
 CFLAGS+= -DDEBUG
-LDFLAGS = -W,l$(MYSQLLDFLAGS)
+LDFLAGS = $(MYSQLLDFLAGS)
 
 default: all
 

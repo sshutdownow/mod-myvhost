@@ -11,7 +11,7 @@ Group: System Environment/Daemons
 Source: http://mod-myvhost.googlecode.com/files/%{name}-%{version}.tar.gz
 #Source1: 
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-Requires: mysql httpd httpd-mmn = %([ -a %{_includedir}/httpd/.mmn ] && cat %{_includedir}/httpd/.mmn || echo missing)
+Requires: httpd httpd-mmn = %([ -a %{_includedir}/httpd/.mmn ] && cat %{_includedir}/httpd/.mmn || echo missing)
 BuildRequires: httpd-devel mysql-devel
 
 %description
