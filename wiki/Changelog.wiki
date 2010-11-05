@@ -4,7 +4,7 @@
 ==Changelog:==
 
 {{{
-* Fri, 05 Nov 2010 - Igor Popov <ipopovi@gmail.com> - v0.20b
+* Fri Nov 05 2010 - Igor Popov <ipopovi@gmail.com> - v0.20b
 - Added Ubuntu package for DBD version.
 }}}
 {{{
