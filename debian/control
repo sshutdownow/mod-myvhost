@@ -1,0 +1,18 @@
+Source: mod-myvhost-dbd
+Priority: extra
+Maintainer: Igor Popov <ipopovi@gmail.com>
+Build-Depends: debhelper (>= 7.0.50~)
+Standards-Version: 3.8.4
+Section: libs
+Homepage: http://code.google.com/p/mod-myvhost/
+#Vcs-Git: git://git.debian.org/collab-maint/mod-myvhost-dbd.git
+Vcs-Browser: http://code.google.com/p/mod-myvhost/source/checkout
+
+Package: mod-myvhost-dbd
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Apache module for dynamically configured mass virtual hosting with php
+ mod_myvhost is Apache module for dynamically configured name based mass virtual hosting with php, virtual host's configurations and php settings are stored in SQL database.
+ No need to have every vhost in apache's configuration file, no need to restart apache after configuration changed (vhost added|deleted, vhost rootdir changed, vhost unblocked/unblocked...).
+ After all, it is capable to change settings of PHP4/5 dynamically (if php is loadable module or it is linked with apache) for any vhost. By default, it sets open_basedir as vhost's rootdir to prevent user from stoling files from other users and from your server, but you have ability to change almost any parameter that exists in php.ini, for example, you can turn on safe_mode or register_globals for particular vhost, if it has old php scripts that use global variables.

@@ -27,45 +27,45 @@ p_cache_t cache_vhost_find(myvhost_cfg_t *cfg, const char *hostname)
 {
     p_cache_t vhost;
     apr_time_t cur;
-
+    
     if (!cfg->cache_enabled) {
-        return NULL;
+	return NULL;
     }
 
     vhost = apr_hash_get(cfg->cache, hostname, APR_HASH_KEY_STRING);
     if (!vhost) {
-        return NULL;
+	return NULL;
     }
 
     cur = apr_time_now();
 
     if (vhost->hits > 0 && vhost->hits < 512 && vhost->access_time + 300 >= cur) {
-        vhost->hits++;
+	vhost->hits++;
     } else if (vhost->hits < 0 && vhost->hits > -256 && vhost->access_time + 180 >= cur) {
-        vhost->hits--;
+	vhost->hits--;
     } else {
-        apr_hash_set(cfg->cache, hostname, APR_HASH_KEY_STRING, NULL);	/* delete hash entry */
-        vhost = NULL;
+	apr_hash_set(cfg->cache, hostname, APR_HASH_KEY_STRING, NULL);	/* delete hash entry */
+	vhost = NULL;
     }
     return vhost;
 }
 
 void cache_vhost_add(myvhost_cfg_t *cfg,
-                     const char *hostname,
-                     const char *root,
-                     const char *admin,
+		     const char *hostname,
+		     const char *root,
+		     const char *admin,
 #ifdef WITH_PHP
-                     const char *php_ini_conf,
+		     const char *php_ini_conf,
 #endif
 #ifdef WITH_UID_GID
-                     const int uid, const int gid,
+		     const int uid, const int gid,
 #endif
-                     const int hits)
+		     const int hits)
 {
     p_cache_t vhost;
 
     if (!cfg->cache_enabled) {
-        return;
+	return;
     }
 
     vhost = apr_pcalloc(cfg->pool, sizeof(cache_t));
@@ -86,16 +86,16 @@ void cache_vhost_add(myvhost_cfg_t *cfg,
 void cache_vhost_del(myvhost_cfg_t *cfg, apr_hash_t *cache, const char *host)
 {
     if (!cfg->cache_enabled) {
-        return;
+	return;
     }
     apr_hash_set(cache, host, APR_HASH_KEY_STRING, NULL);	/* delete hash entry */
 }
 
 
-/*
+/*  
  *    apr_hash_clear appeared in apr 1.3.0
  */
-#if !defined(APR_VERSION_AT_LEAST)
+#if !defined(APR_VERSION_AT_LEAST) 
 struct apr_hash_entry_t {
     struct apr_hash_entry_t *next;
     unsigned int      hash;
@@ -103,33 +103,33 @@ struct apr_hash_entry_t {
     apr_ssize_t       klen;
     const void       *val;
 };
-
+		    	    	    	    
 struct apr_hash_index_t {
     apr_hash_t         *ht;
     struct apr_hash_entry_t   *this, *next;
     unsigned int        index;
 };
 
-apr_hash_index_t *hi;
+    apr_hash_index_t *hi;
 #endif
 
 /* FIXME: delete entries that is really older */
 void cache_vhost_flush(myvhost_cfg_t *cfg, apr_hash_t *cache, time_t older __unused)
 {
-#if !defined(APR_VERSION_AT_LEAST)
+#if !defined(APR_VERSION_AT_LEAST) 
     apr_hash_index_t *hi;
 #endif
 
     if (!cfg->cache_enabled) {
-        return;
+	return;
     }
     if (!cache) {
-        return;
+	return;
     }
-
+               
 #if !defined(APR_VERSION_AT_LEAST)
     for (hi = apr_hash_first(NULL, cache); hi; hi = apr_hash_next(hi))
-        apr_hash_set(cache, hi->this->key, hi->this->klen, NULL);
+	apr_hash_set(cache, hi->this->key, hi->this->klen, NULL);
 #else
     apr_hash_clear(cache);
 #endif

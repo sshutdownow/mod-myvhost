@@ -1,0 +1,5 @@
+mod-myvhost-dbd (0.20b-1) stable; urgency=low
+
+  * Added Ubuntu package
+
+ -- Igor Popov <ipopovi@gmail.com>  Fri, 05 Nov 2010 01:45:49 +0200
