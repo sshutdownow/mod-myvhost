@@ -7,9 +7,17 @@
 NAME = myvhost
 APACHE_MODULE = mod_myvhost.so
 MODULE_LA = mod_myvhost.la
-APXS = apxs
 SRCS = mod_myvhost.c mod_myvhost_cache.c
-OBJS = mod_myvhost.o mod_myvhost_cache.o
+OBJS = $(SRCS:%.c=%.o)
+
+ifeq (0,${MAKELEVEL})
+ifeq (0,$(-shell [ apxs = 127 ]))
+APXS := apxs2
+else
+APXS := apxs
+endif
+endif
+
 
 UNAME := $(shell uname)
 
