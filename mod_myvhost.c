@@ -56,7 +56,7 @@ static int myvhost_module_init(apr_pool_t *p __unused, apr_pool_t *plog __unused
         }
         dbd_acquire_fn = APR_RETRIEVE_OPTIONAL_FN(ap_dbd_acquire);
     }
-#if defined(__linux__)
+#if defined(__linux__) && defined(WITH_POSIX_CAPABILITIES)
     if (prctl(PR_SET_KEEPCAPS, 1) < 0) {
         ap_log_error(APLOG_MARK, APLOG_EMERG, errno, s, "CRITICAL ERROR prctl failed");
         return APR_FROM_OS_ERROR(errno);
@@ -67,7 +67,7 @@ static int myvhost_module_init(apr_pool_t *p __unused, apr_pool_t *plog __unused
 
 static void myvhost_child_init(apr_pool_t *p __unused, server_rec *s)
 {
-#if defined(__linux__)
+#if defined(__linux__) && defined(WITH_POSIX_CAPABILITIES)
     cap_t cap = cap_init();
 
     if (cap_set_flag(cap, CAP_PERMITTED, 3, (cap_value_t[]) {
@@ -122,13 +122,16 @@ typedef struct  {
 static apr_status_t restore_ptr(void *data)
 {
     p_save_ptr_t di = (p_save_ptr_t)data;
+    if (di == NULL || di->original_ptr == NULL) {
+	return APR_EINVAL;
+    }
     *di->original_ptr = di->original_val;
     return APR_SUCCESS;
 }
 
 static apr_status_t restore_uid_gid(void *data __unused)
 {
-#if defined(__linux__)
+#if defined(__linux__) && defined(WITH_POSIX_CAPABILITIES)
     cap_t cap = cap_get_proc();
 
     cap_set_flag(cap, CAP_EFFECTIVE, 2, (cap_value_t[]) {
@@ -600,7 +603,7 @@ static int myvhost_translate_name(request_rec *r)
     }
 #endif /* WITH_PHP */
 #ifdef WITH_UID_GID
-#if defined(__linux__)
+#if defined(__linux__) && defined(WITH_POSIX_CAPABILITIES)
     if (apr_uid_current(&cur_uid, &cur_gid, r->pool) == APR_SUCCESS &&
             unixd_config.user_id == cur_uid && unixd_config.group_id == cur_gid) {
         apr_pool_cleanup_register(r->pool, NULL, restore_uid_gid, restore_uid_gid);
