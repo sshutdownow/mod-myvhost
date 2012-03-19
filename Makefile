@@ -15,14 +15,11 @@ RM = rm -rf
 LN = ln -sf
 CP = cp -f
 
-MYSQLCPPFLAGS = `mysql_config --include`
-MYSQLLDFLAGS  = `mysql_config --libs`
-
-CFLAGS = -Wc,-W -Wc,-Wall $(MYSQLCPPFLAGS)
+CFLAGS = -Wc,-W -Wc,-Wall
 CFLAGS+= -DWITH_PHP
-#CFLAGS+= -DWITH_PHP -DWITH_UID_GID -DWITH_CACHE
 CFLAGS+= -DDEBUG
-#LDFLAGS = -W,l $(MYSQLLDFLAGS)
+#CFLAGS+= -DWITH_PHP -DWITH_UID_GID -DWITH_CACHE
+LDFLAGS = 
 
 default: all
 
