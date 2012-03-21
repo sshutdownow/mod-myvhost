@@ -16,9 +16,9 @@ LN = ln -sf
 CP = cp -f
 
 CFLAGS = -Wc,-W -Wc,-Wall
+CFLAGS+= -DDEBUG
 CFLAGS+= -DWITH_PHP
 #CFLAGS+= -DWITH_PHP -DWITH_UID_GID -DWITH_CACHE
-CFLAGS+= -DDEBUG
 LDFLAGS = 
 
 default: all

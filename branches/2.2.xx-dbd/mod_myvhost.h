@@ -42,7 +42,7 @@ typedef struct {
     const char *hostname;
     const char *ftp_user;
     const char *uri;
-    const char *root;
+    const char *docroot;
     const char *admin;
 #ifdef WITH_PHP
     apr_hash_t *php_ini;

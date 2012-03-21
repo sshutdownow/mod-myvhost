@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Igor Popov <ipopovi@gmail.com>
+ * Copyright (c) 2010-2012 Igor Popov <ipopovi@gmail.com>
  *
  * MOD_MYVHOST DBD version
  *
@@ -66,25 +66,27 @@ static APR_INLINE int isSimpleName(const char *s)
     return 1;
 }
 
-static APR_INLINE int php_ini_set(char* name, char* value)
+#ifdef WITH_PHP
+static APR_INLINE int php_ini_set(const char* name, const char* value)
 {
     return zend_alter_ini_entry(name, strlen(name)+1, value, strlen(value), PHP_INI_SYSTEM, PHP_INI_STAGE_RUNTIME);
 }
+#endif
 
 /*
  * docroot restore code stollen from mod_perl :)
  */
 
 typedef struct  {
-    const char **docroot;
-    const char *original;
-} docroot_t, *p_docroot_t;
+    const char **original_ptr;
+    const char  *original_val;
+} save_ptr_t, *p_save_ptr_t;
 
-/* docroot cleanup handler */
-static apr_status_t restore_docroot(void *data)
+/* cleanup handler */
+static apr_status_t restore_ptr(void *data)
 {
-    p_docroot_t di = (p_docroot_t)data;
-    *di->docroot  = di->original;
+    ap_assert(data);
+    *((p_save_ptr_t)data)->original_ptr = ((p_save_ptr_t)data)->original_val;
     return APR_SUCCESS;
 }
 
@@ -106,12 +108,12 @@ static int myvhost_translate_name(request_rec *r)
     const char *keyHostname = NULL;
     const char *keyFTPuser = NULL;
     const char *keyUri = NULL;
-    const char *root = NULL;
+    const char *docroot = NULL;
     const char *admin = NULL;
     const char *start;
     int maxseg = 0;
     const char *hostname = NULL;
-    p_docroot_t di = 0;
+    p_save_ptr_t di = 0;
 #ifdef WITH_PHP
     char *php_admin = NULL;
     char *tmppath = NULL;
@@ -221,10 +223,10 @@ static int myvhost_translate_name(request_rec *r)
      * Only a change in the hostname, FTP user name, or the part of the URI that we
      * are actually using requires a new query for this connection.
      *
-     * Note that if a conn_conf->root exists we are within the same connection,
+     * Note that if a conn_conf->docroot exists we are within the same connection,
      * so this request is guaranteed to be to the same IP address.
      */
-    if (!conn_conf->root
+    if (!conn_conf->docroot
             || (keyHostname && (!conn_conf->hostname || apr_strnatcmp(conn_conf->hostname, keyHostname)))
             || (keyFTPuser &&  (!conn_conf->ftp_user  || apr_strnatcmp(conn_conf->ftp_user, keyFTPuser)))
             || (keyUri &&      (!conn_conf->uri      || apr_strnatcmp(conn_conf->uri, keyUri)))
@@ -304,16 +306,20 @@ static int myvhost_translate_name(request_rec *r)
 
         apr_hash_clear(conn_conf->envs);
 
+#ifdef WITH_PHP
+        apr_hash_clear(conn_conf->php_ini);
+#endif
+
         for (j = 0; j < cols ; j++) {
             const char *name = apr_dbd_get_name(dbd->driver, res, j);
-            const char *value = apr_dbd_get_entry(dbd->driver, row, j);
+            const char *val = apr_dbd_get_entry(dbd->driver, row, j);
 
             if (!name || !strlen(name)) {
                 continue;
             }
 
             if (!apr_strnatcasecmp(name, "DocumentRoot")) {
-                if (!value || !strlen(value)) {
+                if (!val || !strlen(val)) {
                     /* fetch until -1 return to make sure results set gets cleaned up */
                     while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1)) {
                         continue;
@@ -323,36 +329,46 @@ static int myvhost_translate_name(request_rec *r)
                                   conf->label, keyHostname, keyFTPuser, keyUri);
                     return DECLINED;
                 }
-                root = apr_pstrdup(r->pool, value);
+                docroot = apr_pstrdup(r->pool, val);
                 ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
                               "Successfully executed query: (stmt: %s) returned %d row(s) %d column(s), for key: [%s:%s:%s] DocumentRoot value is: %s",
-                              conf->label, rows, cols, keyHostname, keyFTPuser, keyUri, root);
-            } else if (!apr_strnatcasecmp(name, "ServerAdmin")) {
-                if (!value || !strlen(value)) {
-                    admin = apr_pstrcat(r->pool, "webmaster@", hostname, NULL);
-                } else {
-                    admin = apr_pstrdup(r->pool, value);
+                              conf->label, rows, cols, keyHostname, keyFTPuser, keyUri, docroot);
+                if (!docroot) {
+                    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
+                      "declined: DocumentRoot is empty");
+                    return DECLINED;
+                }
 
+                if (!ap_is_directory(r->pool, docroot)) {
+                    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
+                      "declined: DocumentRoot [%s] is not dir at all", docroot);
+                    return DECLINED;
                 }
 #ifdef WITH_PHP
+                apr_hash_set(conn_conf->php_ini, "safe_mode", APR_HASH_KEY_STRING, "1");
+                apr_hash_set(conn_conf->php_ini, "open_basedir", APR_HASH_KEY_STRING, docroot);
+                if (apr_filepath_merge(&tmppath, docroot, ".tmp", APR_FILEPATH_NATIVE, r->pool) == APR_SUCCESS && ap_is_directory(r->pool, tmppath))
+                {
+                   apr_hash_set(conn_conf->php_ini, "upload_tmp_dir", APR_HASH_KEY_STRING, tmppath);
+                   apr_hash_set(conn_conf->php_ini, "session.save_path", APR_HASH_KEY_STRING, tmppath);
+                }
             } else if (!apr_strnatcasecmp(name, "php_admin")) {
                 char *last, *line;
 
-                if (!value || !strlen(value)) {
+                if (!val || !strlen(val)) {
                     ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
                                   "query (stmt: %s) for key [%s:%s:%s] returned empty value for php_admin",
                                   conf->label, keyHostname, keyFTPuser, keyUri);
                     continue;
                 }
 
-                php_admin = apr_pstrdup(r->pool, value);
-
-                apr_hash_clear(conn_conf->php_ini);
+                php_admin = apr_pstrdup(r->pool, val);
 
                 ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
                               "query (stmt: %s) for key [%s:%s:%s] for php_admin returned [%s]",
                               conf->label, keyHostname, keyFTPuser, keyUri, php_admin);
-                for (line = apr_strtok(php_admin, ";", &last); line != NULL; line = apr_strtok (NULL, ";", &last)) {
+
+                for (line = apr_strtok(php_admin, ";", &last); line != NULL; line = apr_strtok(NULL, ";", &last)) {
                     char *php_name, *php_value;
                     int idx;
 
@@ -369,6 +385,8 @@ static int myvhost_translate_name(request_rec *r)
 
                 }
 #endif
+            } else if (!apr_strnatcasecmp(name, "ServerAdmin")) {
+                admin = apr_pstrdup(r->pool, val);
             } else { /* save any extra columns to become env variables */
                 int k;
                 char str[MAX_ENV_NAME];
@@ -382,14 +400,18 @@ static int myvhost_translate_name(request_rec *r)
                 }
                 apr_hash_set(conn_conf->envs,
                              apr_pstrdup(r->connection->pool, str), APR_HASH_KEY_STRING,
-                             apr_pstrdup(r->connection->pool, value));
+                             apr_pstrdup(r->connection->pool, val));
             }
+        }
+
+        if (!admin || !strlen(admin)) {
+            admin = apr_pstrcat(r->pool, "webmaster@", hostname, NULL);
         }
 
         conn_conf->hostname = keyHostname ? apr_pstrdup(r->connection->pool, keyHostname) : NULL;
         conn_conf->ftp_user = keyFTPuser ? apr_pstrdup(r->connection->pool, keyFTPuser) : NULL;
         conn_conf->uri = keyUri ? apr_pstrdup(r->connection->pool, keyUri) : NULL;
-        conn_conf->root = root ? apr_pstrdup(r->connection->pool, root) : NULL;
+        conn_conf->docroot = docroot ? apr_pstrdup(r->connection->pool, docroot) : NULL;
         conn_conf->admin = admin ? apr_pstrdup(r->connection->pool, admin) : NULL;
 
         /* fetch until -1 return to make sure results set gets cleaned up */
@@ -397,25 +419,13 @@ static int myvhost_translate_name(request_rec *r)
             continue;
         }
     } else  {
-        /* NO - we do not need to execute a query. Use the root we saved in conn_conf */
-        root = conn_conf->root;
+        /* NO - we do not need to execute a query. Use the docroot we saved in conn_conf */
+        docroot = conn_conf->docroot;
         admin = conn_conf->admin;
         ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r,
                       "Using previous connection query (stmt: %s) key: [%s:%s:%s] for DocumentRoot [%s] and ServerAdmin [%s]",
-                      conf->label, keyHostname, keyFTPuser, keyUri, root, admin);
+                      conf->label, keyHostname, keyFTPuser, keyUri, docroot, admin);
 
-    }
-
-    if (!root) {
-        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
-                      "declined: DocumentRoot is empty");
-        return DECLINED;
-    }
-
-    if (!ap_is_directory(r->pool, root)) {
-        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
-                      "declined: DocumentRoot [%s] is not dir at all", root);
-        return DECLINED;
     }
 
     trimmedUri = r->uri;
@@ -423,23 +433,23 @@ static int myvhost_translate_name(request_rec *r)
         ++trimmedUri;
     }
 
-    if (apr_filepath_merge(&r->filename, root, trimmedUri,
+    if (apr_filepath_merge(&r->filename, docroot, trimmedUri,
                            APR_FILEPATH_TRUENAME | APR_FILEPATH_SECUREROOT,
                            r->pool)) {
         ap_log_rerror(APLOG_MARK, APLOG_ERR, rv, r,
                       "forbidden: cannot map [%s] to file with DocumentRoot [%s]",
-                      r->the_request, root);
+                      r->the_request, docroot);
         return HTTP_FORBIDDEN;
     }
 
-    /* got a good doc root - set it and save the result for this conn */
+    /* got a good doc docroot - set it and save the result for this conn */
     r->canonical_filename = r->filename;
-    conn_conf->root = apr_pstrdup(r->connection->pool, root);
+    conn_conf->docroot = apr_pstrdup(r->connection->pool, docroot);
 
     /* set env variables - unset them if NULL or zero-length value */
     for (hidx = apr_hash_first(r->pool, conn_conf->envs); hidx ; hidx = apr_hash_next(hidx)) {
-        const char *name ;
-        const char *val;
+        const char *name, *val;
+
         apr_hash_this(hidx, (void *)&name, NULL, (void *)&val);
         if (val && *val) {
             apr_table_set(r->subprocess_env, name, val);
@@ -449,41 +459,32 @@ static int myvhost_translate_name(request_rec *r)
     }
 
     di = apr_palloc(r->pool, sizeof *di);
-    di->docroot = &scfg->ap_document_root;
-    di->original = scfg->ap_document_root;
-    apr_pool_cleanup_register(r->pool, di, restore_docroot, restore_docroot);
-    scfg->ap_document_root = root;
+    di->original_ptr = &scfg->ap_document_root;
+    di->original_val = scfg->ap_document_root;
+    apr_pool_cleanup_register(r->pool, di, restore_ptr, restore_ptr);
+    scfg->ap_document_root = docroot;
+
     r->server->is_virtual = 1;
+
+    di = apr_palloc(r->pool, sizeof *di);
+    di->original_ptr = &r->server->server_admin;
+    di->original_val = r->server->server_admin;
+    apr_pool_cleanup_register(r->pool, di, restore_ptr, restore_ptr);
     r->server->server_admin = admin;
 
 #ifdef WITH_PHP
     /* set php settings */
     for (hidx = apr_hash_first(r->pool, conn_conf->php_ini); hidx; hidx = apr_hash_next(hidx)) {
-        const char *name ;
-        const char *val;
+        const char *name, *val;
+
         apr_hash_this(hidx, (void *)&name, NULL, (void *)&val);
         if (php_ini_set(name, val) < 0) {
             ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r,
-                          "zend_alter_ini_entry() set [%s] to [%s] failed", name, val);
+                          "php_ini_set([%s], [%s]) failed", name, val);
         }
     }
 
-    apr_table_setn(r->subprocess_env, "PHP_DOCUMENT_ROOT", root);
-    if (php_ini_set("open_basedir", root) < 0) {
-        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'open_basedir' failed");
-    }
-
-    if (php_ini_set("safe_mode", "1") < 0) {
-        ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'safe_mode' failed");
-    }
-
-    if (apr_filepath_merge(&tmppath, root, ".tmp", APR_FILEPATH_NATIVE, r->pool) == APR_SUCCESS &&
-            ap_is_directory(r->pool, tmppath))
-    {
-        if (php_ini_set("upload_tmp_dir", tmppath) < 0) {
-            ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ALERT, 0, r, "zend_alter_ini_entry() set 'upload_tmp_dir' failed");
-        }
-    }
+    apr_table_setn(r->subprocess_env, "PHP_DOCUMENT_ROOT", docroot);
 #endif /* WITH_PHP */
 
     return (rv == APR_SUCCESS) ? OK : HTTP_BAD_REQUEST;
