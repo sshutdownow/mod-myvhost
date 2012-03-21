@@ -42,16 +42,12 @@ typedef struct {
     const char *hostname;
     const char *ftp_user;
     const char *uri;
-    const char *root;
+    const char *docroot;
     const char *admin;
 #ifdef WITH_PHP
     apr_hash_t *php_ini;
 #endif
     apr_hash_t *envs;
-#ifdef WITH_UID_GID
-    const uid_t uid;
-    const gid_t gid;
-#endif
 } myvhost_con_cfg_t;
 
 /* parameter codes */

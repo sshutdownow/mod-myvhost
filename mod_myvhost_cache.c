@@ -52,7 +52,7 @@ p_cache_t cache_vhost_find(myvhost_cfg_t *cfg, const char *hostname)
 
 void cache_vhost_add(myvhost_cfg_t *cfg,
                      const char *hostname,
-                     const char *root,
+                     const char *docroot,
                      const char *admin,
 #ifdef WITH_PHP
                      const char *php_ini_conf,
@@ -70,7 +70,7 @@ void cache_vhost_add(myvhost_cfg_t *cfg,
 
     vhost = apr_pcalloc(cfg->pool, sizeof(cache_t));
     vhost->access_time = apr_time_now();
-    vhost->root = apr_pstrdup(cfg->pool, root);
+    vhost->docroot = apr_pstrdup(cfg->pool, docroot);
     vhost->admin = apr_pstrdup(cfg->pool, admin);
 #ifdef WITH_PHP
     vhost->php_ini_conf = apr_pstrdup(cfg->pool, php_ini_conf);

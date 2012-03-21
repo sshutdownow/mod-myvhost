@@ -7,33 +7,19 @@
 NAME = myvhost
 APACHE_MODULE = mod_myvhost.so
 MODULE_LA = mod_myvhost.la
+APXS = apxs
 SRCS = mod_myvhost.c mod_myvhost_cache.c
-OBJS = $(SRCS:%.c=%.o)
-
-ifeq (0,${MAKELEVEL})
-ifeq (0,$(-shell [ apxs = 127 ]))
-APXS := apxs2
-else
-APXS := apxs
-endif
-endif
-
-
-UNAME := $(shell uname)
+OBJS = mod_myvhost.o mod_myvhost_cache.o
 
 RM = rm -rf
 LN = ln -sf
 CP = cp -f
 
 CFLAGS = -Wc,-W -Wc,-Wall
-CFLAGS+= -DWITH_PHP
-#CFLAGS+=  -DWITH_CACHE
 CFLAGS+= -DDEBUG
-
-ifeq ($(UNAME), Linux)
-CFLAGS+= -DWITH_UID_GID
-LDFLAGS =  -l cap
-endif
+CFLAGS+= -DWITH_PHP
+#CFLAGS+= -DWITH_PHP -DWITH_UID_GID -DWITH_CACHE
+LDFLAGS = 
 
 default: all
 
