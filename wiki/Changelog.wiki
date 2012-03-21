@@ -5,7 +5,7 @@
 
 {{{
 * Wed Mar 21 2012 Igor Popov <ipopovi@gmail.com> - v0.21
-- allow client to set safe_mode and open_basedir
+- now it is allowed to set safe_mode and open_basedir from DB
 - set upload_tmp_dir and session.save_path to $DocRoot/.tmp if it exists
 }}}
 {{{
