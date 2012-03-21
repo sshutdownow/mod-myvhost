@@ -4,6 +4,11 @@
 ==Changelog:==
 
 {{{
+* Wed Mar 21 2012 Igor Popov <ipopovi@gmail.com> - v0.21
+- allow client to set safe_mode and open_basedir
+- set upload_tmp_dir and session.save_path to $DocRoot/.tmp if it exists
+}}}
+{{{
 * Fri Nov 05 2010 - Igor Popov <ipopovi@gmail.com> - v0.20b
 - Added Ubuntu package for DBD version.
 }}}

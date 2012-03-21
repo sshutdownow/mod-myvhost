@@ -1,7 +1,8 @@
 #summary TODO
 
- * Allow simultaneously using vhosts defined by original Apache's configuration file(s) and by *mod_myvhost*. (DONE)
+ * Allow simultaneously using vhosts defined in Apache's configuration file(s) and by *mod_myvhost*. (DONE)
  * Porting module to Apache 2.2.xx. (DONE)
  * Use *mod_dbd* instead of direct using MySQL. Additionally, mod_dbd give us opportunity to use many different databases, not only MySQL. (DONE)
  * Add functionality from *mod_rewrite* and *mod_alias*.
- * Using caching system, for example, memcached.
+ * Since PHP 5.4.0 there is no *safe_mode* option, so we need another mechanism to prevent clients interference. I have created expiremental branch POSIX.1e, but it is better to use MPM-ITK. (In Progress)
+ * Using global caching system, say, memcached. use mod_memcache as example.
