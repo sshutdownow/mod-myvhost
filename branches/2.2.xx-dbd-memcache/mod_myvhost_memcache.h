@@ -44,6 +44,7 @@
 #define MEMCACHE_DECLARE_DATA             __declspec(dllimport)
 #endif
 
+/*
 #include "apr_hooks.h"
 #include "apr.h"
 #include "apr_lib.h"
@@ -58,6 +59,7 @@
 #include "http_main.h"
 #include "http_log.h"
 #include "apr_memcache.h"
+*/
 
 MEMCACHE_DECLARE_NONSTD(apr_memcache_t*) ap_memcache_client(server_rec *s);
 MEMCACHE_DECLARE_NONSTD(apr_hash_t*) ap_memcache_serverhash(server_rec *s);
