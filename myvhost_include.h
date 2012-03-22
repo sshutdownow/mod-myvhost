@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005-2010 Igor Popov <ipopovi@gmail.com>
+ * Copyright (c) 2005-2012 Igor Popov <ipopovi@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy
@@ -38,7 +38,6 @@
 #ifdef WITH_MEMCACHE
 #include "apr_memcache.h"
 #endif
-
 
 
 #if !defined(__unused)
