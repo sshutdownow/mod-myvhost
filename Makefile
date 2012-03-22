@@ -8,8 +8,8 @@ NAME = myvhost
 APACHE_MODULE = mod_myvhost.so
 MODULE_LA = mod_myvhost.la
 APXS = apxs
-SRCS = mod_myvhost.c mod_myvhost_cache.c
-OBJS = mod_myvhost.o mod_myvhost_cache.o
+SRCS = mod_myvhost.c mod_myvhost_cache.c mod_myvhost_memcache.c
+OBJS = mod_myvhost.o mod_myvhost_cache.o mod_myvhost_memcache.o
 
 RM = rm -rf
 LN = ln -sf
@@ -18,7 +18,7 @@ CP = cp -f
 CFLAGS = -Wc,-W -Wc,-Wall
 CFLAGS+= -DDEBUG
 CFLAGS+= -DWITH_PHP
-#CFLAGS+= -DWITH_PHP -DWITH_UID_GID -DWITH_CACHE
+CFLAGS+= -DWITH_MEMCACHE
 LDFLAGS = 
 
 default: all
