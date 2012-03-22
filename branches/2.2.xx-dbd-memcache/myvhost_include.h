@@ -35,6 +35,10 @@
 #include "http_core.h"
 #include "http_log.h"
 #include "mod_dbd.h"
+#ifdef WITH_MEMCACHE
+#include "apr_memcache.h"
+#endif
+
 
 
 #if !defined(__unused)
