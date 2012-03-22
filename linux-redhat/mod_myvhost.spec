@@ -3,8 +3,8 @@
 #
 Summary: Apache module for dynamically configured name-based mass virtual hosting with PHP.
 Name: mod_myvhost
-Version: 0.20
-Release: 9
+Version: 0.21
+Release: 1
 License: Apache-2.0
 URL: http://code.google.com/p/mod-myvhost/
 Group: System Environment/Daemons
@@ -34,7 +34,7 @@ for particular vhost, if it has old php scripts that use global variables.
 %setup -q -n %{name}-%{version}
 
 %build
-make %{_smp_mflags}
+make %{_smp_mflags} -f Makefile
 
 %install
 rm -rf %{buildroot}
@@ -52,6 +52,10 @@ rm -rf %{buildroot}
 %attr(0644,root,root) %config(noreplace) %{_sysconfdir}/httpd/conf.d/zz%{name}.conf
 
 %changelog
+* Wed Mar 21 2012 Igor Popov <ipopovi@gmail.com> - v0.21
+- allow client set safe_mode and open_basedir
+- set upload_tmp_dir and session.save_path to $DocRoot/.tmp if it exists
+
 * Fri Mar 19 2010 Igor Popov <ipopovi@gmail.com> - v0.20b
 - set upload_tmp_dir to $DocRoot/.tmp if exists
 - DBD version seems to work, but missed some functionality.
