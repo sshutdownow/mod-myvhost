@@ -21,7 +21,7 @@
 #include "mod_myvhost.h"
 #include "mod_myvhost_memcache.h"
 
-static const char __unused cvsid[] = "$$";
+static const char __unused cvsid[] = "$Id$";
 
 
 module AP_MODULE_DECLARE_DATA memcache_module;
