@@ -62,7 +62,7 @@ CREATE TABLE `vhosts` (
 
 GRANT SELECT ON hosting.vhosts TO 'nonpriv'@'localhost' IDENTIFIED BY 'MeGaPassvv0d';
 
-INSERT INTO `vhosts` VALUES ('w_3.vhost.net', 'yes', '/var/www/vhosts/01', 'w_3@vhost.net', 'enable_dl=0;default_charset=koi8-r;');
+INSERT INTO `vhosts` VALUES ('w_3.vhost.net', 'yes', '/var/www/vhosts/01', 'w_3@vhost.net', 'safe_mode=off;register_globals=On;open_basedir=/var/www/vhosts/01:/var/www/vhosts/share/pear;');
 INSERT INTO `vhosts` VALUES ('www.vhost.net', 'yes', '/var/www/vhosts/02', 'www@vhost.net', '');
 }}}
 
