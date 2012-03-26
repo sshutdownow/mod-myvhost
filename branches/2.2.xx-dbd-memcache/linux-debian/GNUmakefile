@@ -4,7 +4,7 @@
 # $Id: Makefile 84 2010-11-05 10:46:23Z iPopovi $
 #
 
-builddir=.
+builddir=..
 top_srcdir=/usr/share/apache2
 top_builddir=/usr/share/apache2
 include /usr/share/apache2/build/special.mk
