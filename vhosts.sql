@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005-2010 Igor Popov <ipopovi@gmail.com>
+ * Copyright (c) 2005-2012 Igor Popov <ipopovi@gmail.com>
  *
  * $Id$
  *
@@ -21,7 +21,8 @@ CREATE TABLE `vhosts` (
 
 GRANT SELECT ON `hosting`.`vhosts` TO 'nonpriv'@'localhost' IDENTIFIED BY 'MeGaPassvv0d';
 
-INSERT INTO `vhosts` VALUES ('w3.myvhost1.net', NULL, 'yes', '/var/www/vhosts/01', 'www@vhost1.net', 'enable_dl=0;default_charset=koi8-r;');
-INSERT INTO `vhosts` VALUES ('www.myvhost2.net', 'myvhost2.net','yes', '/var/www/vhosts/02', 'www@vhost2.net', 'default_charset=koi8-r;');
+INSERT INTO `vhosts` VALUES ('v01.myvhosts.net', NULL, 'yes', '/var/www/vhosts/v01', 'www@vhosts.net', 'safe_mode=off;register_globals=On;open_basedir=/var/www/vhosts/v01:/var/www/share/pear;');
+INSERT INTO `vhosts` VALUES ('v02.myvhosts.net', 'v02alias.net','yes', '/var/www/vhosts/v02', 'www@myvhosts.net', '');
+INSERT INTO `vhosts` VALUES ('v03.myvhosts.net', 'anotherhost.net','yes', '/var/www/vhosts/v03', 'www@myvhosts.net', '');
 
 COMMIT;
