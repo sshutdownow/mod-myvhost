@@ -8,8 +8,10 @@ NAME = myvhost
 APACHE_MODULE = mod_myvhost.so
 MODULE_LA = mod_myvhost.la
 APXS = apxs
-SRCS = mod_myvhost.c mod_myvhost_cache.c mod_myvhost_memcache.c
-OBJS = mod_myvhost.o mod_myvhost_cache.o mod_myvhost_memcache.o
+SRCS = mod_myvhost.c mod_myvhost_cache.c
+#mod_myvhost_memcache.c
+OBJS = mod_myvhost.o mod_myvhost_cache.o
+#mod_myvhost_memcache.o
 
 RM = rm -rf
 LN = ln -sf

@@ -4,6 +4,10 @@
  * MOD_MYVHOST DBD version
  *
  *
+ * Copyright 2007 Josh Rotenberg
+ * mod_memcache code
+ *
+ *
  * MOD_VHOST_DBD  Apache 2.2 module
  *
  * Copyright 2008 Tom Donovan
@@ -28,6 +32,7 @@
 #include "mod_myvhost.h"
 #include "mod_myvhost_cache.h"
 #include "mod_myvhost_php.h"
+#include "mod_myvhost_memcache.h"
 
 #if (APU_MAJOR_VERSION < 1) || (APU_MAJOR_VERSION == 1 && APU_MINOR_VERSION < 3)
 #error "At least version 1.3.x of APR-Utils libraries is required"
@@ -491,7 +496,7 @@ static int myvhost_translate_name(request_rec *r)
 }
 
 /* process DBDocRoot directive */
-static const char *setVhostQuery(cmd_parms *cmd, void* mconfig __unused,
+static const char *set_vhost_query(cmd_parms *cmd, void* mconfig __unused,
                                  const char *sql, const char *paramName)
 {
     static long label_num = 0;
@@ -546,16 +551,61 @@ static const char *setVhostQuery(cmd_parms *cmd, void* mconfig __unused,
     return NULL;
 }
 
-static void *merge_config_server(apr_pool_t *p __unused, void *parentconf,
-                                 void *newconf)
+#if defined(WITH_MEMCACHE)
+/* process DBDMemCacheServer directive */
+static const char *set_memcache_server(cmd_parms *cmd, void *doof __unused, int argc, char *const argv[])
 {
-    myvhost_cfg_t *base = (myvhost_cfg_t *) parentconf;
-    myvhost_cfg_t *add = (myvhost_cfg_t *) newconf;
+  apr_status_t rv;
+  apr_memcache_server_t *ms;
+  apr_uint32_t min = 0, max = 0, smax = 0, ttl = 0;
+  char *server = NULL, *host = NULL, *port = NULL;
+  myvhost_cfg_t *conf = (myvhost_cfg_t *) ap_get_module_config(cmd->server->module_config, &myvhost_module);
+  int i;
 
-    return (add->label) ? add : base;
+  for (i = 0; i < argc; i++) {
+    char *w = argv[i];
+
+    if (!strncasecmp(w, "Min=", 4)) {
+      min = atoi(&w[4]);
+    } else if (!strncasecmp(w, "Max=", 4)) {
+      max = atoi(&w[4]);
+    } else if (!strncasecmp(w, "Ttl=", 4)) {
+      ttl = atoi(&w[4]);
+    } else if (!strncasecmp(w, "Smax=", 5)) {
+      smax = atoi(&w[5]);
+    } else {
+      server = apr_pstrdup(cmd->pool, w); /* save this for the hash key */
+      host = apr_pstrdup(cmd->pool, w);
+
+      port = strchr(host, ':');
+
+      if (port) {
+        *(port++) = '\0';
+      }
+
+      if (port == NULL || host == NULL) {
+        return "Server must be in the format <host>:<port>";
+      }
+    }
+  }
+
+  ms = apr_pcalloc(cmd->pool, sizeof(apr_memcache_server_t));
+  if (ms == NULL) {
+    return "Unable to allocate new memcache server";
+  }
+
+  rv = apr_memcache_server_create(cmd->pool, host, atoi(port), min, smax, max, ttl, &ms);
+  if (rv != APR_SUCCESS) {
+    return "Unable to connect to server";
+  }
+
+  apr_hash_set(conf->memcache_servers, server, APR_HASH_KEY_STRING, ms);
+
+  return NULL;
 }
+#endif /* WITH_MEMCACHE */
 
-static void *config_server(apr_pool_t *p, server_rec *s __unused)
+static void *create_config_server(apr_pool_t *p, server_rec *s __unused)
 {
     myvhost_cfg_t *conf = apr_pcalloc(p, sizeof(myvhost_cfg_t));
     if (!dbd_prepare_fn) {
@@ -564,20 +614,114 @@ static void *config_server(apr_pool_t *p, server_rec *s __unused)
         dbd_acquire_fn =
             APR_RETRIEVE_OPTIONAL_FN(ap_dbd_acquire);
     }
+
+#if defined(WITH_MEMCACHE)
+    conf->memcache = NULL;
+    conf->memcache_servers = apr_hash_make(p);
+#endif
+
     return conf;
 }
+
+static void *merge_config_server(apr_pool_t *p __unused, void *parentconf, void *newconf)
+{
+    myvhost_cfg_t *base = (myvhost_cfg_t *) parentconf;
+    myvhost_cfg_t *add = (myvhost_cfg_t *) newconf;
+
+/*  memcache_config *base = (memcache_config *) basev;
+  memcache_config *overrides = (memcache_config *) overridesv;
+  memcache_config *config = apr_pcalloc(pool, sizeof(memcache_config));
+  config->mc = overrides->mc;
+  config->servers = overrides->servers;
+
+  return (void *) config;
+*/
+
+    return (add->label) ? add : base;
+}
+
+#if defined(WITH_MEMCACHE)
+static int myvhost_post_config(apr_pool_t *pconf, apr_pool_t *plog __unused, apr_pool_t *ptemp __unused, server_rec *s)
+{
+  server_rec *sp;
+
+  for (sp = s; sp; sp = sp->next) {
+    apr_status_t rv;
+    apr_hash_index_t *hi; 
+    void *val;
+    apr_memcache_server_t *ms;
+    apr_uint16_t max;
+
+    myvhost_cfg_t *conf = (myvhost_cfg_t *) ap_get_module_config(sp->module_config, &myvhost_module);
+
+    max = apr_hash_count(conf->memcache_servers);
+
+    rv = apr_memcache_create(pconf, max, 0, &conf->memcache);
+  
+    if (rv != APR_SUCCESS) {
+      ap_log_error(APLOG_MARK, APLOG_ERR, rv, sp, 
+                   "Unable to create memcache object");
+      return rv;
+    }
+    
+    for (hi = apr_hash_first(pconf, conf->memcache_servers); 
+         hi; 
+         hi = apr_hash_next(hi)) {
+      
+      apr_hash_this(hi, NULL, NULL, &val);
+      ms = (apr_memcache_server_t *)val;
+
+      rv = apr_memcache_add_server(conf->memcache, ms);
+
+      if( rv != APR_SUCCESS) {
+        ap_log_error(APLOG_MARK, APLOG_ERR, rv, sp, 
+                     "Unable to add server: %s:%d",
+                     ms->host, ms->port);
+        return rv;
+      }
+      ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, sp, 
+                   "added server: %s:%d to %s:%d",
+                   ms->host, ms->port, sp->server_hostname, sp->port);
+    }
+  }
+
+  return OK;
+}
+
+/* client function to return a memcache object */
+apr_memcache_t *ap_memcache_client(server_rec *s)
+{
+    myvhost_cfg_t *conf = (myvhost_cfg_t *) ap_get_module_config(s->module_config, &myvhost_module);
+    return conf->memcache;
+}
+
+/* client function to return a hash of memcache servers keyed on host:port */
+apr_hash_t *ap_memcache_serverhash(server_rec *s)
+{
+    myvhost_cfg_t *conf = (myvhost_cfg_t *) ap_get_module_config(s->module_config, &myvhost_module);
+    return conf->memcache_servers;
+}
+#endif /* WITH_MEMCACHE */
 
 static void register_hooks(apr_pool_t *pool __unused)
 {
     static const char * const translate_pre[] = { "mod_alias.c", NULL };
 
     ap_hook_translate_name(myvhost_translate_name, translate_pre, NULL, APR_HOOK_MIDDLE);
+
+#if defined(WITH_MEMCACHE)
+    ap_hook_post_config(myvhost_post_config, NULL, NULL, APR_HOOK_MIDDLE);
+#endif
 }
 
 static const command_rec cmds[] =
 {
-    AP_INIT_ITERATE2("DBDocRoot", setVhostQuery, NULL, RSRC_CONF,
-    "DBDocRoot  QUERY  [HOSTNAME|IP|PORT|URI[n]]..."),
+    AP_INIT_ITERATE2("DBDocRoot", set_vhost_query, NULL, RSRC_CONF,
+                     "DBDocRoot  QUERY  [HOSTNAME|IP|PORT|URI[n]]..."),
+#if defined(WITH_MEMCACHE)
+    AP_INIT_TAKE_ARGV("DBDMemCacheServer", set_memcache_server, NULL, RSRC_CONF,
+                      "memcached host, port, and other options"),
+#endif
     {NULL}
 };
 
@@ -586,7 +730,7 @@ module AP_MODULE_DECLARE_DATA myvhost_module =
     STANDARD20_MODULE_STUFF,
     NULL,                       /* create per-dir config */
     NULL,                       /* merge per-dir config */
-    config_server,              /* server config */
+    create_config_server,       /* server config */
     merge_config_server,        /* merge server config */
     cmds,                       /* command apr_table_t */
     register_hooks              /* register hooks */
