@@ -1,5 +1,5 @@
 #summary Install instructions.
-#labels Featured,Phase-Deploy
+#labels Phase-Deploy
 
 ==Installation from Sources==
 
