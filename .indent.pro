@@ -1,4 +1,4 @@
--i4 -npsl -di0 -br -nce -d0 -cli0 -npcs -nfc1
+-i4 -npsl -di0 -br -nce -d0 -cli0 -npcs -nfc1 -ce
 -TBUFF
 -TFILE
 -TTRANS
@@ -52,8 +52,14 @@
 -Tu_wide_int
 -Tvtime_t
 -Twide_int
+-Tapr_pool_t
+-Tapr_hash_t
+-Tapr_memcache_t
+-Tapr_time_t
 -Tcache_t
 -Tp_cache_t
 -Tmyvhost_cfg_t
--Tap_pool
--Tap_hash_t
+-Tsave_ptr_t
+-Tp_save_ptr_t
+-Tparam_names_t
+-Tmyvhost_con_cfg_t

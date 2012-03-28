@@ -558,32 +558,33 @@ static const char *set_memcache_server(cmd_parms *cmd, void *doof __unused, int 
   apr_status_t rv;
   apr_memcache_server_t *ms;
   apr_uint32_t min = 0, max = 0, smax = 0, ttl = 0;
-  char *server = NULL, *host = NULL, *port = NULL;
+  char *server = NULL, *host = NULL;
   myvhost_cfg_t *conf = (myvhost_cfg_t *) ap_get_module_config(cmd->server->module_config, &myvhost_module);
-  int i;
+  int port = 0, i;
 
   for (i = 0; i < argc; i++) {
     char *w = argv[i];
 
-    if (!strncasecmp(w, "Min=", 4)) {
-      min = atoi(&w[4]);
-    } else if (!strncasecmp(w, "Max=", 4)) {
-      max = atoi(&w[4]);
-    } else if (!strncasecmp(w, "Ttl=", 4)) {
-      ttl = atoi(&w[4]);
-    } else if (!strncasecmp(w, "Smax=", 5)) {
-      smax = atoi(&w[5]);
+    if (!strncasecmp(w, "Min=", strlen("Min="))) {
+      min = strtol(w + strlen("Min="), NULL, 10);
+    } else if (!strncasecmp(w, "Max=", strlen("Max="))) {
+      max = strtol(w + strlen("Max="), NULL, 10);
+    } else if (!strncasecmp(w, "Ttl=", strlen("Ttl="))) {
+      ttl = strtol(w + strlen("Ttl="), NULL, 10);
+    } else if (!strncasecmp(w, "Smax=", strlen("Smax="))) {
+      smax = strtol(w + strlen("Smax="), NULL, 10);
     } else {
+      int idx;
       server = apr_pstrdup(cmd->pool, w); /* save this for the hash key */
       host = apr_pstrdup(cmd->pool, w);
 
-      port = strchr(host, ':');
-
-      if (port) {
-        *(port++) = '\0';
+      idx = ap_ind(host, ':');
+      if (idx > 0) {
+        host[idx] = '\0';
+        port = strtol(host + idx + 1, NULL, 10);
       }
 
-      if (port == NULL || host == NULL) {
+      if (port == 0 || host == NULL) {
         return "Server must be in the format <host>:<port>";
       }
     }
@@ -594,9 +595,9 @@ static const char *set_memcache_server(cmd_parms *cmd, void *doof __unused, int 
     return "Unable to allocate new memcache server";
   }
 
-  rv = apr_memcache_server_create(cmd->pool, host, atoi(port), min, smax, max, ttl, &ms);
+  rv = apr_memcache_server_create(cmd->pool, host, port, min, smax, max, ttl, &ms);
   if (rv != APR_SUCCESS) {
-    return "Unable to connect to server";
+    return "Unable to connect to memcache server";
   }
 
   apr_hash_set(conf->memcache_servers, server, APR_HASH_KEY_STRING, ms);
