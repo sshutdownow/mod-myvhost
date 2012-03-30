@@ -26,9 +26,14 @@
 #ifndef MEMCACHE_H
 #define MEMCACHE_H
 
+typedef struct {
+    const char *hostname;
+    apr_port_t port;
+    apr_uint32_t min, max, smax, ttl;
+    apr_memcache_server_t *memcache_server;
+} memcached_server_cfg_t;
+
 __BEGIN_DECLS
-apr_memcache_t* ap_memcache_client(server_rec*);
-apr_hash_t* ap_memcache_serverhash(server_rec*);
 __END_DECLS
 
 #endif
