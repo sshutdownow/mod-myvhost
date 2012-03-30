@@ -121,7 +121,6 @@ static int myvhost_translate_name(request_rec *r)
     p_save_ptr_t di = 0;
 #ifdef WITH_PHP
     char *php_admin = NULL;
-    char *tmppath = NULL;
 #endif
     apr_hash_index_t *hidx;
     myvhost_cfg_t *conf =
@@ -234,9 +233,11 @@ static int myvhost_translate_name(request_rec *r)
     if (!conn_conf->docroot
             || (keyHostname && (!conn_conf->hostname || apr_strnatcmp(conn_conf->hostname, keyHostname)))
             || (keyFTPuser &&  (!conn_conf->ftp_user  || apr_strnatcmp(conn_conf->ftp_user, keyFTPuser)))
-            || (keyUri &&      (!conn_conf->uri      || apr_strnatcmp(conn_conf->uri, keyUri)))
-       ) {
-        /* YES - we do need to execute a query */
+            || (keyUri &&      (!conn_conf->uri      || apr_strnatcmp(conn_conf->uri, keyUri))) )
+    { /* try find previous result in memcache */
+
+    } else if (!conn_conf->docroot) {
+        /* YES - we do need to execute a query to DB */
         if ((dbd = dbd_acquire_fn(r)) == NULL) {
             ap_log_rerror(APLOG_MARK, APLOG_CRIT, 0, r,
                           "Error acquiring connection to database");
@@ -324,6 +325,9 @@ static int myvhost_translate_name(request_rec *r)
             }
 
             if (!apr_strnatcasecmp(name, "DocumentRoot")) {
+#ifdef WITH_PHP
+                char *tmppath = NULL;
+#endif
                 if (!val || !strlen(val)) {
                     /* fetch until -1 return to make sure results set gets cleaned up */
                     while (!apr_dbd_get_row(dbd->driver, r->pool, res, &row, -1)) {
@@ -529,7 +533,7 @@ static const char *set_vhost_query(cmd_parms *cmd, void* mconfig __unused,
            )
         {
             conf->params[conf->nparams] = URI;
-            conf->urisegs[conf->nparams] = atoi(paramName+3);
+            conf->urisegs[conf->nparams] = apr_atoi64(paramName+3);
         } else {
             return apr_pstrcat(cmd->pool,
                                "invalid parameter name: ",
@@ -555,53 +559,55 @@ static const char *set_vhost_query(cmd_parms *cmd, void* mconfig __unused,
 /* process DBDMemCacheServer directive */
 static const char *set_memcache_server(cmd_parms *cmd, void *doof __unused, int argc, char *const argv[])
 {
-  apr_status_t rv;
-  apr_memcache_server_t *ms;
-  apr_uint32_t min = 0, max = 0, smax = 0, ttl = 0;
-  char *server = NULL, *host = NULL;
+  char *host = NULL;
   myvhost_cfg_t *conf = (myvhost_cfg_t *) ap_get_module_config(cmd->server->module_config, &myvhost_module);
-  int port = 0, i;
+  int i;
+  memcached_server_cfg_t *ms = apr_pcalloc(cmd->pool, sizeof(memcached_server_cfg_t));
+
+  if (ms == NULL) {
+    return "Unable to allocate struct for memcache server";
+  }
 
   for (i = 0; i < argc; i++) {
     char *w = argv[i];
 
+    ms->min = 1;
+    ms->max = 10000;
+    ms->ttl = 10;
+    ms->smax = 10;
+
     if (!strncasecmp(w, "Min=", strlen("Min="))) {
-      min = strtol(w + strlen("Min="), NULL, 10);
+      ms->min = apr_atoi64(w + strlen("Min="));
     } else if (!strncasecmp(w, "Max=", strlen("Max="))) {
-      max = strtol(w + strlen("Max="), NULL, 10);
+      ms->max = apr_atoi64(w + strlen("Max="));
     } else if (!strncasecmp(w, "Ttl=", strlen("Ttl="))) {
-      ttl = strtol(w + strlen("Ttl="), NULL, 10);
+      ms->ttl = apr_atoi64(w + strlen("Ttl="));
     } else if (!strncasecmp(w, "Smax=", strlen("Smax="))) {
-      smax = strtol(w + strlen("Smax="), NULL, 10);
+      ms->smax = apr_atoi64(w + strlen("Smax="));
     } else {
       int idx;
-      server = apr_pstrdup(cmd->pool, w); /* save this for the hash key */
-      host = apr_pstrdup(cmd->pool, w);
 
+      host = apr_pstrdup(cmd->pool, w);
       idx = ap_ind(host, ':');
+
       if (idx > 0) {
         host[idx] = '\0';
-        port = strtol(host + idx + 1, NULL, 10);
+        ms->hostname = apr_pstrdup(cmd->pool, host); /* save this for the hash key */
+        ms->port = apr_atoi64(host + idx + 1);
+        host[idx] = ':';
       }
 
-      if (port == 0 || host == NULL) {
+      if (ms->hostname == NULL || ms->port == 0) {
         return "Server must be in the format <host>:<port>";
       }
     }
   }
 
-  ms = apr_pcalloc(cmd->pool, sizeof(apr_memcache_server_t));
-  if (ms == NULL) {
-    return "Unable to allocate new memcache server";
-  }
+  apr_hash_set(conf->memcache_servers, host, APR_HASH_KEY_STRING, ms);
 
-  rv = apr_memcache_server_create(cmd->pool, host, port, min, smax, max, ttl, &ms);
-  if (rv != APR_SUCCESS) {
-    return "Unable to connect to memcache server";
-  }
-
-  apr_hash_set(conf->memcache_servers, server, APR_HASH_KEY_STRING, ms);
-
+  ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, cmd->server,
+                     "configured memcache server: Min=%d Max=%d TTL=%d Smax=%d %s:%d",
+                     ms->min, ms->max, ms->ttl, ms->smax, ms->hostname, ms->port);
   return NULL;
 }
 #endif /* WITH_MEMCACHE */
@@ -629,16 +635,7 @@ static void *merge_config_server(apr_pool_t *p __unused, void *parentconf, void 
     myvhost_cfg_t *base = (myvhost_cfg_t *) parentconf;
     myvhost_cfg_t *add = (myvhost_cfg_t *) newconf;
 
-/*  memcache_config *base = (memcache_config *) basev;
-  memcache_config *overrides = (memcache_config *) overridesv;
-  memcache_config *config = apr_pcalloc(pool, sizeof(memcache_config));
-  config->mc = overrides->mc;
-  config->servers = overrides->servers;
-
-  return (void *) config;
-*/
-
-    return (add->label) ? add : base;
+    return (void*) (add->label)? add : base;
 }
 
 #if defined(WITH_MEMCACHE)
@@ -650,7 +647,6 @@ static int myvhost_post_config(apr_pool_t *pconf, apr_pool_t *plog __unused, apr
     apr_status_t rv;
     apr_hash_index_t *hi; 
     void *val;
-    apr_memcache_server_t *ms;
     apr_uint16_t max;
 
     myvhost_cfg_t *conf = (myvhost_cfg_t *) ap_get_module_config(sp->module_config, &myvhost_module);
@@ -658,61 +654,52 @@ static int myvhost_post_config(apr_pool_t *pconf, apr_pool_t *plog __unused, apr
     max = apr_hash_count(conf->memcache_servers);
 
     rv = apr_memcache_create(pconf, max, 0, &conf->memcache);
-  
     if (rv != APR_SUCCESS) {
-      ap_log_error(APLOG_MARK, APLOG_ERR, rv, sp, 
-                   "Unable to create memcache object");
+      ap_log_error(APLOG_MARK, APLOG_ERR, rv, sp, "Unable to create memcache object");
       return rv;
     }
-    
+
     for (hi = apr_hash_first(pconf, conf->memcache_servers); 
          hi; 
          hi = apr_hash_next(hi)) {
-      
+      memcached_server_cfg_t *ms;
+
       apr_hash_this(hi, NULL, NULL, &val);
-      ms = (apr_memcache_server_t *)val;
+      ms = (memcached_server_cfg_t*)val;
 
-      rv = apr_memcache_add_server(conf->memcache, ms);
+      rv = apr_memcache_server_create(pconf, ms->hostname, ms->port, ms->min, ms->smax, ms->max, ms->ttl, &ms->memcache_server);
+      if (rv != APR_SUCCESS) {
+        ap_log_error(APLOG_MARK, APLOG_ALERT, rv, sp,
+                     "Unable to connect to memcache server: %s:%d", ms->hostname, ms->port);
+      }
 
-      if( rv != APR_SUCCESS) {
+      rv = apr_memcache_add_server(conf->memcache, ms->memcache_server);
+      if (rv != APR_SUCCESS) {
         ap_log_error(APLOG_MARK, APLOG_ERR, rv, sp, 
                      "Unable to add server: %s:%d",
-                     ms->host, ms->port);
+                     ms->hostname, ms->port);
         return rv;
       }
+
       ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, sp, 
                    "added server: %s:%d to %s:%d",
-                   ms->host, ms->port, sp->server_hostname, sp->port);
+                   ms->hostname, ms->port, sp->server_hostname, sp->port);
     }
   }
 
   return OK;
 }
 
-/* client function to return a memcache object */
-apr_memcache_t *ap_memcache_client(server_rec *s)
-{
-    myvhost_cfg_t *conf = (myvhost_cfg_t *) ap_get_module_config(s->module_config, &myvhost_module);
-    return conf->memcache;
-}
-
-/* client function to return a hash of memcache servers keyed on host:port */
-apr_hash_t *ap_memcache_serverhash(server_rec *s)
-{
-    myvhost_cfg_t *conf = (myvhost_cfg_t *) ap_get_module_config(s->module_config, &myvhost_module);
-    return conf->memcache_servers;
-}
 #endif /* WITH_MEMCACHE */
 
 static void register_hooks(apr_pool_t *pool __unused)
 {
     static const char * const translate_pre[] = { "mod_alias.c", NULL };
 
-    ap_hook_translate_name(myvhost_translate_name, translate_pre, NULL, APR_HOOK_MIDDLE);
-
 #if defined(WITH_MEMCACHE)
     ap_hook_post_config(myvhost_post_config, NULL, NULL, APR_HOOK_MIDDLE);
 #endif
+    ap_hook_translate_name(myvhost_translate_name, translate_pre, NULL, APR_HOOK_MIDDLE);
 }
 
 static const command_rec cmds[] =
