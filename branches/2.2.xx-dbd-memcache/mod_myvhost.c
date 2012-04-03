@@ -106,7 +106,7 @@ static int myvhost_translate_name(request_rec *r)
     apr_dbd_prepared_t *prestmt;
     int rows = 0;
     int cols = 0;
-    int rv = 0;
+    int rv = APR_SUCCESS;
     int i, j;
     const char **params;
     const char *trimmedUri;
@@ -130,6 +130,7 @@ static int myvhost_translate_name(request_rec *r)
         (myvhost_con_cfg_t*) ap_get_module_config(r->connection->conn_config,
                 &myvhost_module);
     core_server_config *scfg = ap_get_module_config(r->server->module_config, &core_module);
+    char hash_prefix[MAX_PARAMS+1] = { 0 }, *hash_key;
 
     if (conf->label == NULL) {
         return DECLINED;
@@ -170,14 +171,20 @@ static int myvhost_translate_name(request_rec *r)
         case HOSTNAME:
             keyHostname = ap_escape_logitem(r->pool, hostname);
             params[i] = keyHostname;
+            hash_prefix[i] = 'H';
+            hash_key = apr_pstrcat(r->pool, hash_key, params[i], NULL);
             break;
 
         case IP:
             params[i] = mainreq->connection->local_ip;
+            hash_prefix[i] = 'I';
+            hash_key = apr_pstrcat(r->pool, hash_key, params[i], NULL);
             break;
 
         case PORT:
             params[i] = apr_itoa(r->pool, mainreq->connection->local_addr->port);
+            hash_prefix[i] = 'P';
+            hash_key = apr_pstrcat(r->pool, hash_key, params[i], NULL);
             break;
 
         case FTPUSER:
@@ -235,6 +242,15 @@ static int myvhost_translate_name(request_rec *r)
             || (keyFTPuser &&  (!conn_conf->ftp_user  || apr_strnatcmp(conn_conf->ftp_user, keyFTPuser)))
             || (keyUri &&      (!conn_conf->uri      || apr_strnatcmp(conn_conf->uri, keyUri))) )
     { /* try find previous result in memcache */
+        char *data;
+        apr_size_t len;
+        rv = apr_memcache_getp(conf->memcache, r->pool,
+                               apr_pstrcat(r->pool, conf->label, hash_prefix, hash_key, "docroot:", NULL),
+                               &data, &len, NULL);
+       if (rv != APR_SUCCESS) {
+           ap_log_error(APLOG_MARK, APLOG_DEBUG, rv, r->server, 
+                         "no data found for %s", hash_key);
+       }
 
     } else if (!conn_conf->docroot) {
         /* YES - we do need to execute a query to DB */
@@ -417,6 +433,8 @@ static int myvhost_translate_name(request_rec *r)
             admin = apr_pstrcat(r->pool, "webmaster@", hostname, NULL);
         }
 
+//      rv = apr_memcache_set(conf->memcache, apr_pstrcat(r->pool, hash, obj->key, NULL) 
+
         conn_conf->hostname = keyHostname ? apr_pstrdup(r->connection->pool, keyHostname) : NULL;
         conn_conf->ftp_user = keyFTPuser ? apr_pstrdup(r->connection->pool, keyFTPuser) : NULL;
         conn_conf->uri = keyUri ? apr_pstrdup(r->connection->pool, keyUri) : NULL;
@@ -559,13 +577,13 @@ static const char *set_vhost_query(cmd_parms *cmd, void* mconfig __unused,
 /* process DBDMemCacheServer directive */
 static const char *set_memcache_server(cmd_parms *cmd, void *doof __unused, int argc, char *const argv[])
 {
-  char *host = NULL;
   myvhost_cfg_t *conf = (myvhost_cfg_t *) ap_get_module_config(cmd->server->module_config, &myvhost_module);
+  char *host = NULL;
   int i;
   memcached_server_cfg_t *ms = apr_pcalloc(cmd->pool, sizeof(memcached_server_cfg_t));
 
   if (ms == NULL) {
-    return "Unable to allocate struct for memcache server";
+    return "unable to allocate struct to store configuration data of memcache server";
   }
 
   for (i = 0; i < argc; i++) {
@@ -598,7 +616,7 @@ static const char *set_memcache_server(cmd_parms *cmd, void *doof __unused, int 
       }
 
       if (ms->hostname == NULL || ms->port == 0) {
-        return "Server must be in the format <host>:<port>";
+        return "memcache server must be in the format <host>:<port>";
       }
     }
   }
