@@ -30,8 +30,8 @@ typedef struct {
     int nparams;                /* number of params */
     int params[MAX_PARAMS];     /* array of param codes */
     int urisegs[MAX_PARAMS];    /* number of URI segments to use (0=all) */
-#if defined(WITH_CACHE)
     int cache_enabled;
+#if defined(WITH_CACHE)
     apr_hash_t *cache;
     apr_pool_t *pool;
 #endif /* WITH_CACHE */
