@@ -241,7 +241,9 @@ static int myvhost_translate_name(request_rec *r)
             || (keyHostname && (!conn_conf->hostname || apr_strnatcmp(conn_conf->hostname, keyHostname)))
             || (keyFTPuser &&  (!conn_conf->ftp_user  || apr_strnatcmp(conn_conf->ftp_user, keyFTPuser)))
             || (keyUri &&      (!conn_conf->uri      || apr_strnatcmp(conn_conf->uri, keyUri))) )
-    { /* try find previous result in memcache */
+    { 
+       if (conf->cache_enabled) {
+        /* try find previous result in memcache */
         char *data;
         apr_size_t len;
         rv = apr_memcache_getp(conf->memcache, r->pool,
@@ -251,7 +253,7 @@ static int myvhost_translate_name(request_rec *r)
            ap_log_error(APLOG_MARK, APLOG_DEBUG, rv, r->server, 
                          "no data found for %s", hash_key);
        }
-
+     }
     } else if (!conn_conf->docroot) {
         /* YES - we do need to execute a query to DB */
         if ((dbd = dbd_acquire_fn(r)) == NULL) {
@@ -374,8 +376,8 @@ static int myvhost_translate_name(request_rec *r)
                 apr_hash_set(conn_conf->php_ini, "open_basedir", APR_HASH_KEY_STRING, docroot);
                 if (apr_filepath_merge(&tmppath, docroot, ".tmp", APR_FILEPATH_NATIVE, r->pool) == APR_SUCCESS && ap_is_directory(r->pool, tmppath))
                 {
-                   apr_hash_set(conn_conf->php_ini, "upload_tmp_dir", APR_HASH_KEY_STRING, tmppath);
-                   apr_hash_set(conn_conf->php_ini, "session.save_path", APR_HASH_KEY_STRING, tmppath);
+                   apr_hash_set(conn_conf->php_ini, "upload_tmp_dir", APR_HASH_KEY_STRING, apr_pstrdup(r->pool, tmppath));
+                   apr_hash_set(conn_conf->php_ini, "session.save_path", APR_HASH_KEY_STRING, apr_pstrdup(r->pool, tmppath));
                 }
             } else if (!apr_strnatcasecmp(name, "php_admin")) {
                 char *last, *line;
@@ -703,8 +705,8 @@ static int myvhost_post_config(apr_pool_t *pconf, apr_pool_t *plog __unused, apr
                    "added server: %s:%d to %s:%d",
                    ms->hostname, ms->port, sp->server_hostname, sp->port);
     }
+    conf->cache_enabled = 1;
   }
-
   return OK;
 }
 
@@ -713,11 +715,12 @@ static int myvhost_post_config(apr_pool_t *pconf, apr_pool_t *plog __unused, apr
 static void register_hooks(apr_pool_t *pool __unused)
 {
     static const char * const translate_pre[] = { "mod_alias.c", NULL };
+    static const char * const translate_post[] = { "mod_rewrite.c", NULL };
 
 #if defined(WITH_MEMCACHE)
     ap_hook_post_config(myvhost_post_config, NULL, NULL, APR_HOOK_MIDDLE);
 #endif
-    ap_hook_translate_name(myvhost_translate_name, translate_pre, NULL, APR_HOOK_MIDDLE);
+    ap_hook_translate_name(myvhost_translate_name, translate_pre, translate_post, APR_HOOK_MIDDLE);
 }
 
 static const command_rec cmds[] =
