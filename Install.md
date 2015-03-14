@@ -1,0 +1,84 @@
+## Installation from Sources ##
+
+### Prerequisities: ###
+This packages usually are required for successful compilation:
+```
+httpd-devel
+mysql-devel
+```
+### Download source code: ###
+The latest version of **mod\_myvhost** is [here](http://code.google.com/p/mod-myvhost/downloads/list/)
+### Decompress the source: ###
+```
+tar -xzvf mod_myvhost-x.xx.tar.gz
+```
+### Building mod\_myvhost: ###
+There are some settings available at compile time: if you do not want [php](http://www.php.net/) support than remove -DWITH\_PHP from CFLAGS in Makefile. If you want to test module's internal caching than add -DWITH\_CACHE to CFLAGS in Makefile.
+Now just type `make`.
+### Install mod\_myvhost: ###
+You have to have root privileges.
+```
+sudo make install
+```
+## Installation from RPM ##
+If you are running RedHat or CentOS it is easier to install module from rpm:
+```
+rpm -Uvh mod_myvhost-0.16-2.i386.rpm
+```
+## MySQL: ##
+Now it is time to create database that will be used to store vhost configurations. You can use _vhosts.sql_ file as example.
+```
+CREATE DATABASE `hosting`;
+USE `hosting`;
+
+CREATE TABLE `vhosts` (
+    `vhost` varchar(255) NOT NULL default '',
+#   `valias` varchar(255) NOT NULL default '',    
+    `enabled` enum('yes','no') NOT NULL default 'no',
+    `rootdir` varchar(255) NOT NULL default '',
+    `admin` varchar(255) default '',
+    `extra_php_config` text,
+    UNIQUE KEY `vhostname` (`vhost`),
+    KEY `enabled` (`enabled`)
+) TYPE=MyISAM COMMENT='vhosts';
+
+GRANT SELECT ON hosting.vhosts TO 'nonpriv'@'localhost' IDENTIFIED BY 'M3Ga PaSsVVd';
+
+INSERT INTO `vhosts` VALUES ('w_3.vhost.net', 'yes', '/var/www/vhosts/01', 'w_3@vhost.net', 'enable_dl=0');
+INSERT INTO `vhosts` VALUES ('www.vhost.net', 'yes', '/var/www/vhosts/02', 'www@vhost.net', '');
+```
+Create database and table:
+```
+mysql -u root -p < vhosts.sql
+```
+## Apache: ##
+Edit apache configuration file, you may use _httpd.conf.add_ as example, make sure that mod\_myvhost.so is loaded after libphp5.so.
+```
+<IfModule mod_myvhost.c>
+    MyVhostOn		on
+    MyVhostDbHost	"localhost"
+    MyVhostDbSocket	"/tmp/mysql.sock"
+    MyVhostDbUser	"nonpriv"
+    MyVhostDbPass	"M3Ga PaSsVVd"
+    MyVhostDbName	"hosting"
+    MyVhostQuery	"SELECT rootdir,admin,extra_php_config FROM vhosts WHERE (vhost LIKE '%1$s' OR CONCAT_WS('.', 'www', vhost) LIKE '%1$s') AND enabled='yes' LIMIT 1"
+#   MyVhostQuery	"SELECT rootdir,admin,extra_php_config FROM vhosts WHERE (vhost LIKE '%1$s' OR CONCAT_WS('.', 'www', vhost) LIKE '%1$s' OR valias='%1$s) AND enabled='yes' LIMIT 1"
+    <Directory "/var/www/vhosts">
+        Options Indexes
+        AllowOverride None
+        Order allow,deny
+        Allow from all
+    </Directory>
+</IfModule>
+```
+
+The most important parameter that you should take into account is MyVhostQuery, it must contain one and only one %s (it is not true for version >= 0.15 ), that is substituted by vhostname from http request. If hostname is absent or no vhost found in DB, than request is served as usual.
+
+The module expects MySQL to return up to three fields (for >= 0.15 up to five): the first one is treated as absolute path of vhost's server root (magically becomes **open\_basedir**) and safe mode is on by default, than goes vhost's admin (email) and the third (if exists) is pairs of php variables and their values delimited by equality sign, pairs in turn are separated by semicolon, for boolean variables you should use 1 and 0.
+## Make it all working: ##
+Just restart apache:
+```
+apachectl stop; sleep 3; apachectl start
+```
+So, it should work now.
+This module is tested to compile and work on FreeBSD and Linux with MySQL 4.0.xx, 4.1.xx and 5.0.xx.
