@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005-2010 Igor Popov <ipopovi@gmail.com>
+ * Copyright (c) 2005-2025 Igor Popov <ipopovi@gmail.com>
  *
  * $Id$
  *
