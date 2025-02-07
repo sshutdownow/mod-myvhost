@@ -24,8 +24,8 @@ jobs:
         mysql user: 'developer' # Required if "mysql root password" is empty, default is empty. The superuser for the specified database. Can use secrets, too
         mysql password: ${{ secrets.MySQLUserPassword }} # Required if "mysql user" exists. The password for the "mysql user"
     - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
+#    - name: configure
+#      run: ./configure
     - name: make
       run: make
     - name: make check
