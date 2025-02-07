@@ -27,7 +27,7 @@ jobs:
     - name: Install Apache
       run: |
         sudo apt update
-        sudo apt install -y apache2
+        sudo apt install -y apache2 apache2-dev
     - name: make
       run: make
     - name: make check
