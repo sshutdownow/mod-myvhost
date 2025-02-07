@@ -19,7 +19,9 @@ CREATE TABLE `vhosts` (
     KEY `enabled` (`enabled`)
 ) COMMENT='vhosts';
 
-GRANT SELECT ON `hosting`.`vhosts` TO 'nonpriv'@'localhost' IDENTIFIED BY 'MeGaPassvv0d';
+CREATE USER 'nonpriv'@'localhost' IDENTIFIED BY 'MeGaPassvv0d';
+GRANT SELECT ON `hosting`.`vhosts` TO 'nonpriv'@'localhost';
+FLUSH PRIVILEGES;
 
 INSERT INTO `vhosts` VALUES ('w3.myvhost1.net', NULL, 'yes', '/var/www/vhosts/01', 'www@vhost1.net', 'enable_dl=0;default_charset=koi8-r;');
 INSERT INTO `vhosts` VALUES ('www.myvhost2.net', 'myvhost2.net','yes', '/var/www/vhosts/02', 'www@vhost2.net', 'default_charset=koi8-r;');
