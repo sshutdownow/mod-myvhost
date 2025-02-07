@@ -24,6 +24,8 @@ jobs:
         mysql user: 'developer' # Required if "mysql root password" is empty, default is empty. The superuser for the specified database. Can use secrets, too
         mysql password: ${{ secrets.MySQLUserPassword }} # Required if "mysql user" exists. The password for the "mysql user"
     - uses: actions/checkout@v4
+    - name: Restart Ubuntu MySQL (SUDO)
+      run: sudo service mysql restart
     - name: Create MySQL tables
       run: cat vhosts.sql | mysql -u root --password='${{ secrets.MySQLRootPassword }}'
     - name: Install Apache Development
