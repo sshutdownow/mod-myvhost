@@ -25,9 +25,9 @@ jobs:
         mysql password: ${{ secrets.MySQLUserPassword }} # Required if "mysql user" exists. The password for the "mysql user"
     - uses: actions/checkout@v4
     - name: Restart Ubuntu MySQL (SUDO)
-      run: sudo service mysql restart || true
+      run: sudo systemctl restart mysql.service || true
     - name: Create MySQL tables
-      run: cat vhosts.sql | mysql -u root -p 3307 --password='${{ secrets.MySQLRootPassword }}'
+      run: cat vhosts.sql | mysql -u root -P 3307 --password='${{ secrets.MySQLRootPassword }}'
     - name: Install Apache Development
       run: |
         sudo apt update
