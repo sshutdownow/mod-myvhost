@@ -32,7 +32,7 @@ jobs:
     - name: Restart Ubuntu MySQL
       run: sudo systemctl restart mysql.service || true
     - name: Create MySQL tables
-      run: cat vhosts.sql | mysql -h localhost -P ${{ env.MYSQL_PORT }} -u ${{ env.MYSQL_USER }} --password='${{ secrets.MySQLRootPassword }}'
+      run: cat vhosts.sql | mysql -P ${{ env.MYSQL_PORT }} -u ${{ env.MYSQL_USER }} --password='${{ secrets.MySQLRootPassword }}'
     - name: Install Apache Development
       run: |
         sudo apt update
