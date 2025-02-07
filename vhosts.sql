@@ -17,7 +17,7 @@ CREATE TABLE `vhosts` (
     `extra_php_config` text,
     UNIQUE KEY `vhostname` (`vhost`, `valias`),
     KEY `enabled` (`enabled`)
-) TYPE=MyISAM COMMENT='vhosts';
+) COMMENT='vhosts';
 
 GRANT SELECT ON `hosting`.`vhosts` TO 'nonpriv'@'localhost' IDENTIFIED BY 'MeGaPassvv0d';
 
