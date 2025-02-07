@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ "master" ]
 
+env:
+  MYSQL_VER: 8.4
+  MYSQL_USER: 'developer'
+  MYSQL_PORT: 3307
+
 jobs:
   build:
 
@@ -14,20 +19,20 @@ jobs:
     steps:
     - uses: mirromutth/mysql-action@v1.1
       with:
-        host port: 3307 # Optional, default value is 3306. The port of host
-        container port: 3307 # Optional, default value is 3306. The port of container
+        host port: ${{ MYSQL_PORT }} # Optional, default value is 3306. The port of host
+        container port: ${{ MYSQL_PORT }} # Optional, default value is 3306. The port of container
         character set server: 'utf8' # Optional, default value is 'utf8mb4'. The '--character-set-server' option for mysqld
         collation server: 'utf8_general_ci' # Optional, default value is 'utf8mb4_general_ci'. The '--collation-server' option for mysqld
-        mysql version: '8.4' # Optional, default value is "latest". The version of the MySQL
+        mysql version: ${{ MYSQL_VER }} # Optional, default value is "latest". The version of the MySQL
         mysql database: 'hosting' # Optional, default value is "test". The specified database which will be create
         mysql root password: ${{ secrets.MySQLRootPassword }} # Required if "mysql user" is empty, default is empty. The root superuser password
-        mysql user: 'developer' # Required if "mysql root password" is empty, default is empty. The superuser for the specified database. Can use secrets, too
+        mysql user: ${{ env.MYSQL_USER }} # Required if "mysql root password" is empty, default is empty. The superuser for the specified database. Can use secrets, too
         mysql password: ${{ secrets.MySQLUserPassword }} # Required if "mysql user" exists. The password for the "mysql user"
     - uses: actions/checkout@v4
-    - name: Restart Ubuntu MySQL (SUDO)
+    - name: Restart Ubuntu MySQL
       run: sudo systemctl restart mysql.service || true
     - name: Create MySQL tables
-      run: cat vhosts.sql | mysql -u root -P 3307 --password=${{ secrets.MySQLRootPassword }}
+      run: cat vhosts.sql | mysql -u ${{ env.MYSQL_USER }} -P ${{ MYSQL_PORT }} --password=${{ secrets.MySQLRootPassword }}
     - name: Install Apache Development
       run: |
         sudo apt update
