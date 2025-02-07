@@ -31,6 +31,6 @@ jobs:
     - name: make
       run: make
     - name: make install
-      run: make install
+      run: sudo make install
 #    - name: make distcheck
 #      run: make distcheck
