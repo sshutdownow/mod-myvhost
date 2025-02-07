@@ -5,7 +5,7 @@
  *
  */
 
-CREATE DATABASE `hosting`;
+CREATE DATABASE IF NOT EXISTS `hosting`;
 USE `hosting`;
 
 CREATE TABLE `vhosts` (
