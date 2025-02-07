@@ -7,8 +7,8 @@ on:
     branches: [ "master" ]
 
 env:
-  MYSQL_VER: 8.4
-  MYSQL_USER: 'developer'
+  MYSQL_VER: "8.4"
+  MYSQL_USER: "developer"
   MYSQL_PORT: 3307
 
 jobs:
@@ -19,11 +19,11 @@ jobs:
     steps:
     - uses: mirromutth/mysql-action@v1.1
       with:
-        host port: ${{ MYSQL_PORT }} # Optional, default value is 3306. The port of host
-        container port: ${{ MYSQL_PORT }} # Optional, default value is 3306. The port of container
+        host port: ${{ env.MYSQL_PORT }} # Optional, default value is 3306. The port of host
+        container port: ${{ env.MYSQL_PORT }} # Optional, default value is 3306. The port of container
         character set server: 'utf8' # Optional, default value is 'utf8mb4'. The '--character-set-server' option for mysqld
         collation server: 'utf8_general_ci' # Optional, default value is 'utf8mb4_general_ci'. The '--collation-server' option for mysqld
-        mysql version: ${{ MYSQL_VER }} # Optional, default value is "latest". The version of the MySQL
+        mysql version: ${{ env.MYSQL_VER }} # Optional, default value is "latest". The version of the MySQL
         mysql database: 'hosting' # Optional, default value is "test". The specified database which will be create
         mysql root password: ${{ secrets.MySQLRootPassword }} # Required if "mysql user" is empty, default is empty. The root superuser password
         mysql user: ${{ env.MYSQL_USER }} # Required if "mysql root password" is empty, default is empty. The superuser for the specified database. Can use secrets, too
@@ -32,7 +32,7 @@ jobs:
     - name: Restart Ubuntu MySQL
       run: sudo systemctl restart mysql.service || true
     - name: Create MySQL tables
-      run: cat vhosts.sql | mysql -u ${{ env.MYSQL_USER }} -P ${{ MYSQL_PORT }} --password=${{ secrets.MySQLRootPassword }}
+      run: cat vhosts.sql | mysql -u ${{ env.MYSQL_USER }} -P ${{ env.MYSQL_PORT }} --password=${{ secrets.MySQLRootPassword }}
     - name: Install Apache Development
       run: |
         sudo apt update
