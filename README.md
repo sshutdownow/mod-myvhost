@@ -7,7 +7,7 @@ After all, it is capable to change settings of PHP4/5 dynamically (if php is loa
 
 ### Copyright
 
-  Copyright (c) 2005-2016 Igor Popov
+  Copyright (c) 2005-2025 Igor Popov
 
 License
 -------
