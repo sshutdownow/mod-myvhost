@@ -27,7 +27,7 @@ jobs:
     - name: Restart Ubuntu MySQL (SUDO)
       run: sudo systemctl restart mysql.service || true
     - name: Create MySQL tables
-      run: cat vhosts.sql | mysql -u root -P 3307 --password='${{ secrets.MySQLRootPassword }}'
+      run: cat vhosts.sql | mysql -u root -P 3307 --password=${{ secrets.MySQLRootPassword }}
     - name: Install Apache Development
       run: |
         sudo apt update
